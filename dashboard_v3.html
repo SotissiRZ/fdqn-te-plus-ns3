@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FDQN-TE+ Dashboard v3</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap');
+:root{
+  --bg:#07101e;--bg2:#0b1729;--bg3:#0f1e35;--bd:#1b2e4a;
+  --cyan:#00d4ff;--green:#00ff88;--orange:#ff8c00;--red:#ff3860;
+  --purple:#a78bfa;--gold:#ffd700;--txt:#dde6f0;--muted:#4e6680;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:'Syne',sans-serif}
+/* Layout principal : colonne */
+#root{display:flex;flex-direction:column;width:100%;height:100%}
+#hdr{flex-shrink:0;background:var(--bg2);border-bottom:1px solid var(--bd);padding:7px 16px;display:flex;align-items:center;justify-content:space-between}
+#tlb{flex-shrink:0;background:var(--bg2);border-bottom:1px solid var(--bd);padding:5px 16px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+#main{flex:1;display:flex;overflow:hidden;min-height:0}
+/* Canvas zone */
+#cwrap{flex:1;min-width:0;min-height:0;position:relative;background:var(--bg)}
+#cv{position:absolute;top:0;left:0;width:100%;height:100%;display:block;cursor:crosshair}
+#coords{position:absolute;bottom:6px;left:8px;font:10px 'Space Mono',monospace;color:var(--muted);pointer-events:none}
+#scalebar{position:absolute;bottom:22px;left:8px;pointer-events:none}
+#scaleline{height:3px;background:var(--muted);border-radius:1px}
+#scalelbl{font:9px 'Space Mono',monospace;color:var(--muted);margin-top:1px}
+/* Sidebar */
+#sb{width:285px;flex-shrink:0;background:var(--bg2);border-left:1px solid var(--bd);overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--bd) transparent}
+/* Composants communs */
+.hdr-logo{font-size:16px;font-weight:800}.hdr-logo span{color:var(--cyan)}
+.hdr-logo small{font:700 10px 'Space Mono',monospace;color:var(--muted);margin-left:6px}
+.hdr-pills{display:flex;gap:6px}
+.pill{display:flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--bd);border-radius:12px;padding:3px 9px;font:10px 'Space Mono',monospace}
+.dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+.dg{background:var(--green);animation:blink 2s infinite}
+.db{background:var(--cyan)}.do{background:var(--orange)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.tsel,.tbtn{background:var(--bg3);border:1px solid var(--bd);color:var(--muted);font:700 10px 'Space Mono',monospace;padding:4px 9px;border-radius:4px;cursor:pointer;outline:none;transition:.15s;text-transform:uppercase;letter-spacing:.5px}
+.tbtn:hover,.tbtn.on,.tsel:hover{border-color:var(--cyan);color:var(--cyan);background:rgba(0,212,255,.07)}
+.tbtn.on{background:rgba(0,212,255,.1)}
+.tsep{width:1px;height:16px;background:var(--bd);margin:0 2px;flex-shrink:0}
+.terr{display:none;background:rgba(255,56,96,.12);border:1px solid var(--red);color:var(--red);border-radius:4px;padding:3px 8px;font:10px 'Space Mono',monospace}
+/* Sidebar blocs */
+.sb-blk{border-bottom:1px solid var(--bd)}
+.sb-hd{padding:7px 11px;font:700 10px 'Space Mono',monospace;text-transform:uppercase;letter-spacing:1px;color:var(--cyan);background:rgba(0,212,255,.025);display:flex;align-items:center;gap:5px}
+.sb-bd{padding:9px 11px}
+/* Métriques */
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.mbox{background:var(--bg3);border:1px solid var(--bd);border-radius:4px;padding:7px 9px}
+.mlbl{font:10px 'Space Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:2px}
+.mval{font:700 18px 'Space Mono',monospace;line-height:1}
+.msub{font:9px 'Space Mono',monospace;color:var(--muted);margin-top:2px}
+.mbar{height:2px;background:var(--bd);border-radius:1px;margin-top:4px;overflow:hidden}
+.mfill{height:100%;border-radius:1px;transition:width .4s}
+/* Phases pipeline */
+.phases{display:flex;gap:4px;margin-top:7px}
+.ph{flex:1;padding:5px 4px;border-radius:3px;border:1px solid var(--bd);background:var(--bg3);text-align:center;font:700 9px 'Space Mono',monospace;color:var(--muted);transition:.3s;letter-spacing:.5px}
+.ph.act{border-color:var(--cyan);color:var(--cyan);background:rgba(0,212,255,.1)}
+/* Inspector */
+.irow{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:11px}
+.irow:last-child{border:none}
+.ik{color:var(--muted);font:10px 'Space Mono',monospace}
+.iv{font:700 10px 'Space Mono',monospace}
+/* Route */
+.rph{background:var(--bg3);border:1px solid var(--bd);border-radius:4px;padding:7px 9px;margin-bottom:6px}
+.rph-title{font:700 9px 'Space Mono',monospace;text-transform:uppercase;letter-spacing:.7px;margin-bottom:5px}
+.hops{display:flex;flex-wrap:wrap;gap:2px;align-items:center}
+.hop{background:var(--bg2);border:1px solid var(--bd);border-radius:3px;padding:2px 5px;font:10px 'Space Mono',monospace}
+.h-src{border-color:var(--green)!important;color:var(--green)}
+.h-ch{border-color:var(--orange)!important;color:var(--orange)}
+.h-rl{border-color:var(--cyan)!important;color:var(--cyan)}
+.h-sk{border-color:var(--gold)!important;color:var(--gold)}
+.harr{color:var(--muted);font-size:12px;line-height:1}
+.rstat{margin-top:4px;font:10px 'Space Mono',monospace}
+/* Légende */
+.lgrid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.li{display:flex;align-items:center;gap:5px;font:10px 'Space Mono',monospace;color:var(--muted)}
+.ld{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.ll{width:14px;height:2px;border-radius:1px;flex-shrink:0}
+/* Log */
+.logbox{font:10px 'Space Mono',monospace;max-height:120px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--bd) transparent}
+.le{padding:1px 0;border-bottom:1px solid rgba(255,255,255,.025);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ts{color:var(--muted)}.ti{color:var(--green)}.tr{color:var(--cyan)}.tf{color:var(--purple)}.tm{color:var(--orange)}.tw{color:var(--red)}
+/* Tooltip */
+#tip{position:fixed;pointer-events:none;display:none;background:#09162a;border:1px solid var(--cyan);border-radius:5px;padding:7px 11px;font:10px 'Space Mono',monospace;z-index:999;min-width:155px;box-shadow:0 4px 18px rgba(0,212,255,.12)}
+#tip .th{color:var(--cyan);font-weight:700;font-size:11px;margin-bottom:3px}
+#tip .tr2{display:flex;justify-content:space-between;gap:10px;padding:1px 0;color:var(--muted)}
+#tip .tr2 b{color:var(--txt)}
+</style>
+</head>
+<body>
+<div id="root">
+
+  <div id="hdr">
+    <div>
+      <span class="hdr-logo">FDQN-TE<span>+</span></span>
+      <small class="hdr-logo" style="font-size:10px;color:var(--muted)">300 nœuds · 150m/saut · Membre→CH→Sink</small>
+    </div>
+    <div class="hdr-pills">
+      <div class="pill"><div class="dot dg"></div><span id="hp-alive">300/300 vivants</span></div>
+      <div class="pill"><div class="dot db"></div>30 clusters IFO</div>
+      <div class="pill"><div class="dot do"></div><span id="hp-view">Clusters</span></div>
+    </div>
+  </div>
+
+  <div id="tlb">
+    <select class="tsel" id="selView" onchange="setView(this.value)">
+      <option value="clusters">CLUSTERS IFO</option>
+      <option value="energy">ÉNERGIE</option>
+      <option value="risk">RISQUE PEPM</option>
+      <option value="routing">ROUTING ADDQN</option>
+      <option value="fed">FÉDÉRATION</option>
+    </select>
+    <div class="tsep"></div>
+    <button class="tbtn on"  id="bLinks"  onclick="tog('links')">LIENS</button>
+    <button class="tbtn on"  id="bLabels" onclick="tog('labels')">CH LABELS</button>
+    <button class="tbtn"     id="bRoutes" onclick="tog('routes')">ROUTE</button>
+    <button class="tbtn"     id="bRadio"  onclick="tog('radio')">PORTÉE 150M</button>
+    <div class="tsep"></div>
+    <button class="tbtn" onclick="resetView()">↺</button>
+    <button class="tbtn" onclick="dZoom(1.2)">＋</button>
+    <button class="tbtn" onclick="dZoom(0.83)">－</button>
+    <div class="tsep"></div>
+    <label class="tbtn" style="border-color:var(--orange);color:var(--orange)" for="fcsv">⬆ CSV</label>
+    <input type="file" id="fcsv" style="display:none" accept=".csv" onchange="loadCSV(event)">
+    <span class="terr" id="terr"></span>
+    <span style="font:10px 'Space Mono',monospace;color:var(--muted);margin-left:auto" id="stime">t=0s · step 0</span>
+  </div>
+
+  <div id="main">
+    <div id="cwrap">
+      <canvas id="cv"></canvas>
+      <div id="scalebar"><div id="scaleline" style="width:40px"></div><div id="scalelbl">100m</div></div>
+      <div id="coords">x=— y=— | zoom 1.0×</div>
+    </div>
+
+    <div id="sb">
+
+      <div class="sb-blk">
+        <div class="sb-hd">📊 MÉTRIQUES NS-3</div>
+        <div class="sb-bd">
+          <div class="mgrid">
+            <div class="mbox"><div class="mlbl">Vivants</div><div class="mval" id="mv-alive" style="color:var(--green)">300</div><div class="msub">/ 300</div><div class="mbar"><div class="mfill" id="mp-alive" style="width:100%;background:var(--green)"></div></div></div>
+            <div class="mbox"><div class="mlbl">PDR</div><div class="mval" id="mv-pdr" style="color:var(--cyan)">100%</div><div class="msub">livraison</div><div class="mbar"><div class="mfill" id="mp-pdr" style="width:100%;background:var(--cyan)"></div></div></div>
+            <div class="mbox"><div class="mlbl">Énergie moy.</div><div class="mval" id="mv-e" style="color:var(--orange)">2.000J</div><div class="msub">±<span id="mv-std">0.000</span>J</div><div class="mbar"><div class="mfill" id="mp-e" style="width:100%;background:var(--orange)"></div></div></div>
+            <div class="mbox"><div class="mlbl">Délai E2E</div><div class="mval" id="mv-d" style="color:var(--purple)">29ms</div><div class="msub">end-to-end</div></div>
+            <div class="mbox"><div class="mlbl">RL Steps</div><div class="mval" id="mv-steps" style="color:var(--cyan);font-size:13px">35 520</div><div class="msub">ADDQN</div></div>
+            <div class="mbox"><div class="mlbl">Epsilon ε</div><div class="mval" id="mv-eps" style="color:var(--orange)">0.771</div><div class="msub">exploit.</div><div class="mbar"><div class="mfill" id="mp-eps" style="width:77%;background:var(--orange)"></div></div></div>
+          </div>
+          <div class="phases">
+            <div class="ph act" id="ph0">IFO</div>
+            <div class="ph" id="ph1">PEPM</div>
+            <div class="ph" id="ph2">ADDQN</div>
+            <div class="ph" id="ph3">REWARD</div>
+            <div class="ph" id="ph4">FED</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sb-blk">
+        <div class="sb-hd">🔍 NŒUD SÉLECTIONNÉ</div>
+        <div class="sb-bd" id="inspector"><div style="text-align:center;padding:14px 0;color:var(--muted);font-size:11px">Cliquez un nœud</div></div>
+      </div>
+
+      <div class="sb-blk">
+        <div class="sb-hd">🛤 ROUTE CONFORME AU MODÈLE</div>
+        <div class="sb-bd" id="routePanel">
+          <div style="color:var(--muted);font-size:10px;line-height:1.6">
+            Cliquez un nœud pour voir :<br>
+            <span style="color:var(--green)">Phase 1</span> Membre → CH (intra-cluster)<br>
+            <span style="color:var(--cyan)">Phase 2</span> CH → Sink (inter-cluster)
+          </div>
+        </div>
+      </div>
+
+      <div class="sb-blk">
+        <div class="sb-hd">🗺 LÉGENDE</div>
+        <div class="sb-bd">
+          <div class="lgrid">
+            <div class="li"><div class="ld" style="background:var(--cyan);box-shadow:0 0 5px var(--cyan)"></div>Cluster Head</div>
+            <div class="li"><div class="ld" style="background:#1a3a5c"></div>Membre</div>
+            <div class="li"><div class="ld" style="background:var(--orange)"></div>Risque PEPM</div>
+            <div class="li"><div class="ld" style="background:var(--red)"></div>Mort</div>
+            <div class="li"><div class="ld" style="background:var(--gold);box-shadow:0 0 5px var(--gold)"></div>Sink (BS)</div>
+            <div class="li"><div class="ll" style="background:rgba(0,212,255,.25)"></div>Lien cluster</div>
+            <div class="li"><div class="ll" style="background:var(--green)"></div>Phase 1 →CH</div>
+            <div class="li"><div class="ll" style="background:var(--cyan)"></div>Phase 2 →Sink</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sb-blk">
+        <div class="sb-hd">📈 CONVERGENCE ADDQN</div>
+        <div class="sb-bd" style="padding:6px 11px 10px">
+          <canvas id="cchart" height="70" style="display:block;width:100%"></canvas>
+        </div>
+      </div>
+
+      <div class="sb-blk">
+        <div class="sb-hd">📟 CONSOLE <button onclick="document.getElementById('logbox').innerHTML=''" style="background:none;border:none;color:var(--muted);cursor:pointer;font:700 9px 'Space Mono',monospace;margin-left:auto;text-transform:uppercase">effacer</button></div>
+        <div class="sb-bd" style="padding:5px 11px 8px">
+          <div class="logbox" id="logbox"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div id="tip">
+  <div class="th" id="tt"></div>
+  <div class="tr2"><span>Cluster</span><b id="tc">—</b></div>
+  <div class="tr2"><span>Énergie</span><b id="te">—</b></div>
+  <div class="tr2"><span>PEPM σ</span><b id="tsk">—</b></div>
+  <div class="tr2"><span>Rôle</span><b id="tro">—</b></div>
+  <div class="tr2"><span>Dist.Sink</span><b id="tds">—</b></div>
+</div>
+
+<script>
+// ── DONNÉES NS-3 RÉELLES (16 Ko) ────────────────────────────
+const ND=[[0,457.3,540.0,93,0,433.8,6],[1,552.8,652.5,93,0,296.0,6],[2,431.0,490.7,283,0,403.7,28],[3,454.6,488.9,283,0,171.2,28],[4,520.0,452.6,107,0,387.7,9],[5,701.6,97.2,169,0,496.0,12],[6,22.7,919.3,6,1,664.5,0],[7,599.5,916.8,205,0,506.0,18],[8,46.6,602.7,8,1,505.4,1],[9,523.4,49.9,273,0,477.6,26],[10,55.0,401.7,10,1,464.3,2],[11,304.3,846.9,259,0,543.9,23],[12,517.9,438.2,107,0,426.2,9],[13,955.2,389.3,13,1,497.3,3],[14,570.8,493.5,192,0,361.5,17],[15,487.8,544.5,93,0,187.0,6],[16,773.0,199.5,169,0,657.6,12],[17,459.4,522.4,283,0,130.9,28],[18,246.7,44.4,262,0,553.8,24],[19,543.0,439.2,107,0,317.3,9],[20,553.2,517.5,93,0,350.9,6],[21,472.9,418.8,107,0,344.3,9],[22,721.9,223.9,169,0,407.7,12],[23,425.8,481.0,283,0,301.5,28],[24,49.4,565.1,24,1,473.6,4],[25,488.3,579.6,93,0,345.9,6],[26,640.2,465.6,192,0,439.4,17],[27,472.8,535.6,93,0,285.9,6],[28,515.1,551.2,93,0,73.5,6],[29,584.1,612.6,93,0,575.7,6],[30,513.2,582.6,93,0,250.5,6],[31,937.5,581.6,31,1,473.3,5],[32,472.0,513.4,283,0,248.3,28],[33,459.8,475.5,283,0,391.9,28],[34,484.3,400.7,107,0,490.4,9],[35,432.0,465.4,283,0,231.7,28],[36,236.7,75.1,262,0,571.7,24],[37,593.8,568.3,93,0,359.0,6],[38,817.1,578.8,31,0,439.3,5],[39,867.7,633.9,31,0,441.6,5],[40,488.2,581.9,93,0,353.7,6],[41,471.3,410.1,107,0,424.7,9],[42,536.4,537.1,93,0,236.7,6],[43,466.0,513.8,283,0,243.1,28],[44,460.9,520.4,283,0,132.1,28],[45,686.8,752.5,205,0,586.7,18],[46,458.5,534.9,283,0,344.8,28],[47,222.6,352.8,185,0,520.3,15],[48,384.5,562.5,283,0,442.5,28],[49,423.8,484.5,283,0,304.4,28],[50,492.2,625.2,93,0,396.5,6],[51,547.4,515.3,93,0,205.5,6],[52,512.6,456.4,107,0,375.5,9],[53,459.1,505.5,283,0,299.6,28],[54,533.2,648.8,93,0,453.8,6],[55,679.5,591.9,31,0,427.4,5],[56,465.2,521.2,283,0,239.2,28],[57,492.9,435.9,107,0,396.9,9],[58,477.9,425.4,107,0,293.7,9],[59,358.6,808.5,259,0,421.6,23],[60,463.1,402.9,107,0,404.3,9],[61,343.8,778.9,259,0,466.3,23],[62,143.4,605.5,283,0,520.9,28],[63,445.6,458.9,283,0,244.6,28],[64,508.4,417.6,107,0,337.1,9],[65,563.6,495.0,192,0,193.0,17],[66,361.5,375.2,185,0,344.4,15],[67,467.6,461.8,283,0,434.9,28],[68,456.6,526.2,283,0,112.3,28],[69,312.1,167.8,107,0,499.9,9],[70,532.7,457.8,107,0,320.3,9],[71,256.3,647.0,283,0,411.0,28],[72,302.2,922.1,259,0,549.7,23],[73,432.0,864.5,93,0,484.9,6],[74,467.8,403.1,107,0,492.0,9],[75,545.0,533.5,93,0,225.2,6],[76,459.6,523.9,283,0,60.7,28],[77,545.8,526.1,93,0,106.7,6],[78,449.6,338.0,107,0,438.9,9],[79,781.3,260.8,94,0,398.0,7],[80,811.6,480.9,192,0,484.3,17],[81,652.0,451.4,192,0,332.2,17],[82,381.7,601.1,283,0,459.4,28],[83,551.4,502.1,93,0,196.0,6],[84,476.1,549.2,93,0,398.4,6],[85,531.4,458.3,107,0,350.5,9],[86,467.5,566.5,93,0,344.5,6],[87,777.7,245.4,94,0,597.6,7],[88,509.4,445.8,107,0,104.0,9],[89,536.7,570.5,93,0,380.7,6],[90,246.4,705.0,289,0,374.1,29],[91,555.2,511.7,93,0,200.1,6],[92,400.1,416.6,283,0,423.5,28],[93,512.9,874.3,93,1,482.5,6],[94,986.6,265.5,94,1,550.9,7],[95,512.8,601.9,93,0,469.1,6],[96,205.5,862.0,212,0,493.3,20],[97,546.1,449.1,192,0,298.4,17],[98,631.2,627.7,93,0,497.1,6],[99,669.1,458.4,192,0,399.4,17],[100,793.3,736.2,211,0,559.4,19],[101,581.3,637.2,93,0,331.6,6],[102,461.9,524.0,283,0,151.1,28],[103,943.5,912.1,103,1,646.6,8],[104,439.5,432.8,283,0,290.8,28],[105,454.6,487.4,283,0,53.5,28],[106,243.4,891.5,212,0,591.2,20],[107,494.4,55.4,107,1,482.0,9],[108,480.8,453.7,283,0,347.8,28],[109,586.5,595.6,93,0,329.3,6],[110,520.8,406.3,107,0,196.6,9],[111,550.5,503.3,93,0,136.6,6],[112,525.5,429.3,107,0,265.2,9],[113,488.2,927.3,93,0,479.1,6],[114,494.2,535.8,93,0,411.4,6],[115,538.8,459.9,192,0,208.6,17],[116,738.1,610.5,31,0,401.4,5],[117,499.7,409.2,107,0,269.8,9],[118,539.2,510.5,93,0,278.0,6],[119,975.2,61.4,119,1,673.0,10],[120,460.9,494.7,283,0,222.5,28],[121,597.5,651.0,93,0,456.5,6],[122,357.9,880.4,259,0,483.6,23],[123,547.3,534.5,93,0,89.5,6],[124,236.5,798.0,289,0,641.1,29],[125,464.1,477.4,283,0,365.1,28],[126,494.9,419.1,107,0,232.0,9],[127,467.2,460.4,283,0,165.2,28],[128,777.1,721.9,211,0,550.8,19],[129,270.6,161.4,263,0,518.9,25],[130,474.4,531.0,93,0,222.0,6],[131,432.8,419.3,283,0,319.9,28],[132,597.3,450.5,192,0,391.2,17],[133,655.7,229.2,107,0,419.1,9],[134,461.4,510.0,283,0,210.2,28],[135,451.6,484.1,283,0,256.6,28],[136,171.8,587.5,283,0,433.0,28],[137,593.2,139.3,273,0,511.1,26],[138,164.3,260.8,263,0,526.8,25],[139,78.3,403.1,139,1,460.9,11],[140,105.8,822.6,289,0,610.4,29],[141,465.1,544.8,93,0,100.0,6],[142,479.6,520.5,93,0,243.2,6],[143,804.6,281.9,94,0,592.6,7],[144,699.5,687.6,205,0,494.7,18],[145,131.7,300.6,185,0,524.5,15],[146,515.0,420.5,107,0,200.2,9],[147,585.3,454.9,192,0,370.9,17],[148,775.6,364.7,192,0,518.3,17],[149,676.1,478.0,192,0,344.7,17],[150,465.7,381.7,107,0,318.2,9],[151,251.8,636.9,283,0,413.0,28],[152,784.7,277.3,94,0,596.1,7],[153,277.0,604.3,283,0,506.6,28],[154,473.7,460.0,283,0,121.1,28],[155,460.5,538.7,93,0,348.8,6],[156,226.3,293.9,185,0,524.7,15],[157,550.8,480.7,192,0,201.7,17],[158,785.0,196.7,169,0,606.3,12],[159,316.1,459.2,283,0,266.5,28],[160,364.6,326.6,185,0,515.3,15],[161,521.3,567.0,93,0,456.1,6],[162,551.1,505.4,93,0,158.0,6],[163,540.7,488.6,93,0,238.9,6],[164,557.9,103.8,273,0,457.1,26],[165,354.6,369.3,185,0,510.7,15],[166,303.0,423.7,283,0,437.8,28],[167,464.8,424.1,283,0,447.5,28],[168,246.8,874.0,259,0,579.1,23],[169,763.4,17.2,169,1,550.0,12],[170,454.9,590.1,93,0,343.2,6],[171,550.4,488.1,93,0,153.9,6],[172,922.8,74.6,172,1,637.2,13],[173,322.0,787.9,259,0,454.6,23],[174,867.2,89.3,172,0,650.2,13],[175,536.9,501.0,93,0,39.4,6],[176,525.8,540.9,93,0,217.4,6],[177,918.0,917.7,177,1,628.0,14],[178,527.4,573.8,93,0,391.7,6],[179,601.6,672.6,93,0,349.2,6],[180,201.4,559.0,283,0,378.7,28],[181,700.5,694.6,205,0,446.8,18],[182,780.3,610.2,31,0,344.3,5],[183,412.6,545.1,283,0,330.1,28],[184,359.7,388.9,139,0,364.1,11],[185,77.8,387.6,185,1,477.1,15],[186,465.5,525.0,283,0,201.7,28],[187,472.1,537.9,93,0,193.3,6],[188,478.6,524.4,93,0,241.6,6],[189,498.5,411.0,107,0,239.3,9],[190,484.5,519.8,93,0,245.4,6],[191,55.4,921.3,191,1,634.8,16],[192,939.3,422.9,192,1,474.7,17],[193,453.9,528.9,283,0,90.3,28],[194,540.5,536.5,93,0,102.3,6],[195,251.6,654.5,283,0,438.5,28],[196,525.4,421.2,107,0,262.6,9],[197,515.3,590.6,93,0,372.3,6],[198,526.0,462.2,107,0,317.3,9],[199,397.4,594.1,283,0,355.1,28],[200,513.4,452.2,107,0,127.0,9],[201,451.5,498.5,283,0,110.4,28],[202,344.9,421.5,283,0,448.3,28],[203,806.6,201.4,172,0,640.0,13],[204,373.8,801.9,93,0,376.2,6],[205,663.2,921.9,205,1,489.8,18],[206,493.0,482.5,283,0,18.8,28],[207,140.0,132.6,263,0,583.4,25],[208,521.8,541.6,93,0,115.7,6],[209,883.2,253.2,94,0,530.7,7],[210,229.4,696.9,289,0,478.1,29],[211,907.5,870.3,211,1,640.8,19],[212,99.7,947.0,212,1,665.7,20],[213,510.6,554.9,93,0,241.4,6],[214,902.4,676.7,281,0,511.9,27],[215,720.0,622.8,31,0,385.9,5],[216,774.9,797.9,211,0,499.2,19],[217,347.9,459.5,283,0,287.1,28],[218,740.0,436.7,192,0,405.3,17],[219,501.8,453.2,283,0,353.6,28],[220,515.4,449.4,107,0,278.9,9],[221,719.4,709.5,205,0,525.9,18],[222,865.5,263.9,94,0,485.3,7],[223,460.3,524.3,283,0,175.7,28],[224,496.1,544.7,93,0,209.0,6],[225,553.4,468.2,192,0,238.6,17],[226,380.2,322.7,107,0,303.2,9],[227,470.7,492.2,283,0,254.9,28],[228,528.9,461.7,107,0,118.7,9],[229,626.1,613.7,93,0,359.8,6],[230,574.3,598.2,93,0,404.8,6],[231,473.3,518.4,283,0,318.9,28],[232,487.7,444.8,283,0,102.2,28],[233,520.1,205.1,107,0,418.1,9],[234,746.1,448.1,192,0,308.7,17],[235,542.2,860.2,93,0,481.2,6],[236,119.7,352.3,185,0,489.8,15],[237,828.9,833.3,211,0,596.6,19],[238,534.0,457.0,107,0,315.0,9],[239,260.8,195.7,263,0,540.1,25],[240,467.2,454.9,283,0,349.9,28],[241,692.4,984.4,241,1,533.5,21],[242,553.9,473.7,192,0,263.9,17],[243,940.5,898.8,243,1,618.7,22],[244,416.8,151.1,107,0,454.5,9],[245,473.8,437.4,283,0,426.2,28],[246,515.2,465.7,283,0,361.5,28],[247,425.5,469.2,283,0,292.8,28],[248,464.4,440.3,283,0,272.6,28],[249,485.9,427.6,107,0,244.6,9],[250,292.4,59.1,107,0,517.0,9],[251,535.9,469.0,93,0,135.8,6],[252,305.5,378.6,185,0,432.4,15],[253,779.2,231.4,94,0,611.3,7],[254,534.8,464.2,192,0,116.3,17],[255,279.0,722.0,289,0,591.5,29],[256,511.4,583.6,93,0,380.2,6],[257,484.9,443.1,283,0,346.7,28],[258,486.7,688.5,93,0,278.3,6],[259,381.8,965.2,259,1,500.7,23],[260,487.6,528.9,93,0,271.6,6],[261,539.9,689.9,93,0,336.3,6],[262,45.0,71.2,262,1,636.4,24],[263,55.7,165.5,263,1,608.8,25],[264,667.4,129.1,169,0,465.9,12],[265,533.9,504.6,93,0,252.3,6],[266,530.1,646.0,93,0,421.9,6],[267,683.9,661.8,205,0,342.4,18],[268,361.8,434.8,283,0,286.3,28],[269,455.0,446.6,283,0,385.7,28],[270,374.9,403.8,139,0,369.4,11],[271,732.9,842.7,205,0,457.3,18],[272,282.0,73.0,107,0,508.7,9],[273,498.3,51.1,273,1,477.8,26],[274,732.0,483.4,192,0,332.2,17],[275,548.2,470.7,192,0,370.2,17],[276,278.4,752.0,289,0,623.2,29],[277,566.6,716.0,93,0,305.4,6],[278,445.7,486.4,283,0,81.9,28],[279,592.3,688.5,93,0,316.9,6],[280,758.5,695.6,31,0,505.6,5],[281,968.2,614.3,281,1,494.6,27],[282,546.0,536.4,93,0,174.2,6],[283,117.3,551.3,283,1,412.6,28],[284,512.5,559.5,93,0,231.3,6],[285,844.3,458.8,192,0,413.4,17],[286,506.6,443.1,107,0,203.4,9],[287,695.0,630.0,31,0,356.3,5],[288,814.7,462.6,192,0,344.5,17],[289,73.2,764.6,289,1,510.4,29],[290,585.7,177.7,107,0,469.9,9],[291,456.9,477.4,283,0,328.5,28],[292,460.5,519.9,283,0,177.3,28],[293,467.1,530.7,93,0,54.6,6],[294,466.7,528.3,93,0,130.9,6],[295,241.0,660.0,283,0,376.1,28],[296,484.9,533.7,93,0,215.4,6],[297,503.3,582.1,93,0,374.6,6],[298,587.8,907.5,205,0,484.0,18],[299,768.8,269.3,94,0,424.0,7]];
+const PTC={"0":[0,1,277,235,93],"1":[1,277,235,93],"2":[2,48,153,62,283],"3":[3,48,153,62,283],"4":[4,2,165,156,129,244,107],"5":[5,169],"7":[7,205],"9":[9,273],"11":[11,259],"12":[12,2,165,156,129,244,107],"14":[14,99,80,192],"15":[15,1,277,235,93],"16":[16,5,169],"17":[17,48,153,62,283],"18":[18,207,262],"19":[19,2,165,156,129,244,107],"20":[20,1,277,235,93],"21":[21,160,156,129,244,107],"22":[22,5,169],"23":[23,48,153,62,283],"25":[25,1,277,235,93],"26":[26,99,80,192],"27":[27,1,277,235,93],"28":[28,1,277,235,93],"29":[29,277,235,93],"30":[30,277,235,93],"32":[32,48,153,62,283],"33":[33,48,153,62,283],"34":[34,160,156,129,244,107],"35":[35,48,153,62,283],"36":[36,207,262],"37":[37,1,277,235,93],"38":[38,31],"39":[39,31],"40":[40,1,277,235,93],"41":[41,160,156,129,244,107],"42":[42,1,277,235,93],"43":[43,48,153,62,283],"44":[44,48,153,62,283],"45":[45,271,205],"46":[46,48,153,62,283],"47":[47,185],"48":[48,153,62,283],"49":[49,48,153,62,283],"50":[50,277,235,93],"51":[51,1,277,235,93],"52":[52,2,165,156,129,244,107],"53":[53,48,153,62,283],"54":[54,277,235,93],"55":[55,38,31],"56":[56,48,153,62,283],"57":[57,2,165,156,129,244,107],"58":[58,165,156,129,244,107],"59":[59,11,259],"60":[60,160,156,129,244,107],"61":[61,11,259],"62":[62,283],"63":[63,48,153,62,283],"64":[64,2,165,156,129,244,107],"65":[65,99,80,192],"66":[66,47,185],"67":[67,48,153,62,283],"68":[68,48,153,62,283],"69":[69,244,107],"70":[70,2,165,156,129,244,107],"71":[71,62,283],"72":[72,259],"73":[73,93],"74":[74,160,156,129,244,107],"75":[75,1,277,235,93],"76":[76,48,153,62,283],"77":[77,1,277,235,93],"78":[78,160,156,129,244,107],"79":[79,209,94],"80":[80,192],"81":[81,99,80,192],"82":[82,71,62,283],"83":[83,29,277,235,93],"84":[84,1,277,235,93],"85":[85,2,165,156,129,244,107],"86":[86,1,277,235,93],"87":[87,209,94],"88":[88,2,165,156,129,244,107],"89":[89,277,235,93],"90":[90,124,140,289],"91":[91,1,277,235,93],"92":[92,48,153,62,283],"95":[95,277,235,93],"96":[96,212],"97":[97,99,80,192],"98":[98,277,235,93],"99":[99,80,192],"100":[100,237,211],"101":[101,277,235,93],"102":[102,48,153,62,283],"104":[104,48,153,62,283],"105":[105,48,153,62,283],"106":[106,96,212],"108":[108,48,153,62,283],"109":[109,277,235,93],"110":[110,2,165,156,129,244,107],"111":[111,1,277,235,93],"112":[112,2,165,156,129,244,107],"113":[113,93],"114":[114,1,277,235,93],"115":[115,99,80,192],"116":[116,38,31],"117":[117,2,165,156,129,244,107],"118":[118,1,277,235,93],"120":[120,48,153,62,283],"121":[121,277,235,93],"122":[122,259],"123":[123,1,277,235,93],"124":[124,140,289],"125":[125,48,153,62,283],"126":[126,165,156,129,244,107],"127":[127,48,153,62,283],"128":[128,237,211],"129":[129,138,263],"130":[130,1,277,235,93],"131":[131,183,153,62,283],"132":[132,99,80,192],"133":[133,137,107],"134":[134,48,153,62,283],"135":[135,48,153,62,283],"136":[136,283],"137":[137,273],"138":[138,263],"140":[140,289],"141":[141,1,277,235,93],"142":[142,29,277,235,93],"143":[143,209,94],"144":[144,45,271,205],"145":[145,185],"146":[146,2,165,156,129,244,107],"147":[147,99,80,192],"148":[148,80,192],"149":[149,80,192],"150":[150,160,156,129,244,107],"151":[151,62,283],"152":[152,209,94],"153":[153,62,283],"154":[154,48,153,62,283],"155":[155,1,277,235,93],"156":[156,47,185],"157":[157,99,80,192],"158":[158,5,169],"159":[159,48,153,62,283],"160":[160,47,185],"161":[161,1,277,235,93],"162":[162,1,277,235,93],"163":[163,29,277,235,93],"164":[164,273],"165":[165,47,185],"166":[166,2,48,153,62,283],"167":[167,183,153,62,283],"168":[168,11,259],"170":[170,1,277,235,93],"171":[171,29,277,235,93],"173":[173,11,259],"174":[174,172],"175":[175,29,277,235,93],"176":[176,1,277,235,93],"178":[178,277,235,93],"179":[179,277,235,93],"180":[180,283],"181":[181,45,271,205],"182":[182,38,31],"183":[183,153,62,283],"184":[184,47,145,139],"186":[186,48,153,62,283],"187":[187,1,277,235,93],"188":[188,1,277,235,93],"189":[189,165,156,129,244,107],"190":[190,1,277,235,93],"193":[193,48,153,62,283],"194":[194,1,277,235,93],"195":[195,62,283],"196":[196,2,165,156,129,244,107],"197":[197,277,235,93],"198":[198,2,165,156,129,244,107],"199":[199,153,62,283],"200":[200,2,165,156,129,244,107],"201":[201,48,153,62,283],"202":[202,48,153,62,283],"203":[203,174,172],"204":[204,73,93],"206":[206,48,153,62,283],"207":[207,263],"208":[208,1,277,235,93],"209":[209,94],"210":[210,124,140,289],"213":[213,1,277,235,93],"214":[214,281],"215":[215,38,31],"216":[216,237,211],"217":[217,48,153,62,283],"218":[218,80,192],"219":[219,183,153,62,283],"220":[220,2,165,156,129,244,107],"221":[221,271,205],"222":[222,94],"223":[223,48,153,62,283],"224":[224,1,277,235,93],"225":[225,99,80,192],"226":[226,160,156,129,244,107],"227":[227,48,153,62,283],"228":[228,2,165,156,129,244,107],"229":[229,277,235,93],"230":[230,277,235,93],"231":[231,48,153,62,283],"232":[232,183,153,62,283],"233":[233,137,107],"234":[234,80,192],"235":[235,93],"236":[236,185],"237":[237,211],"238":[238,2,165,156,129,244,107],"239":[239,138,263],"240":[240,48,153,62,283],"242":[242,99,80,192],"244":[244,107],"245":[245,183,153,62,283],"246":[246,183,153,62,283],"247":[247,48,153,62,283],"248":[248,48,153,62,283],"249":[249,165,156,129,244,107],"250":[250,69,244,107],"251":[251,30,277,235,93],"252":[252,47,185],"253":[253,209,94],"254":[254,99,80,192],"255":[255,124,140,289],"256":[256,277,235,93],"257":[257,183,153,62,283],"258":[258,277,235,93],"260":[260,1,277,235,93],"261":[261,277,235,93],"264":[264,169],"265":[265,1,277,235,93],"266":[266,277,235,93],"267":[267,45,271,205],"268":[268,48,153,62,283],"269":[269,48,153,62,283],"270":[270,66,47,145,139],"271":[271,205],"272":[272,69,244,107],"274":[274,80,192],"275":[275,99,80,192],"276":[276,96,140,289],"277":[277,235,93],"278":[278,48,153,62,283],"279":[279,277,235,93],"280":[280,38,31],"282":[282,1,277,235,93],"284":[284,1,277,235,93],"285":[285,192],"286":[286,2,165,156,129,244,107],"287":[287,38,31],"288":[288,192],"290":[290,9,107],"291":[291,48,153,62,283],"292":[292,48,153,62,283],"293":[293,1,277,235,93],"294":[294,29,277,235,93],"295":[295,62,283],"296":[296,1,277,235,93],"297":[297,277,235,93],"298":[298,205],"299":[299,209,94]};
+const PCS={"6":[6,140,96,276,153,48,-1],"8":[8,62,153,48,-1],"10":[10,145,47,66,2,-1],"13":[13,285,218,26,-1],"24":[24,62,153,48,-1],"31":[31,38,55,14,-1],"93":[93,235,277,29,-1],"94":[94,13,285,218,26,-1],"103":[103,237,100,144,29,-1],"107":[107,244,129,156,160,21,-1],"119":[119,174,16,79,148,99,4,-1],"139":[139,145,47,66,2,-1],"169":[169,5,16,79,148,99,4,-1],"172":[172,174,16,79,148,99,4,-1],"177":[177,237,100,144,29,-1],"185":[185,47,66,2,-1],"191":[191,140,96,276,153,48,-1],"192":[192,80,99,4,-1],"205":[205,235,277,29,-1],"211":[211,237,100,144,29,-1],"212":[212,96,276,153,48,-1],"241":[241,7,235,277,29,-1],"243":[243,237,100,144,29,-1],"259":[259,11,255,153,48,-1],"262":[262,207,129,156,160,21,-1],"263":[263,138,47,66,2,-1],"273":[273,244,129,156,160,21,-1],"281":[281,39,215,29,-1],"283":[283,62,153,48,-1],"289":[289,140,96,276,153,48,-1]};
+
+// ND format: [id, x, y, clusterId, isCH, distToSink, clusterIdx]
+// PTC: {"memberId": [path array to CH]}
+// PCS: {"chId": [path array to sink, ends with -1]}
+
+// ── CONSTANTES ────────────────────────────────────────────────
+const AREA=1000, SX=500, SY=500, RADIO=150;
+const CL=['#00d4ff','#00ff88','#7c3aed','#ff8c00','#f43f5e','#ffd700',
+  '#06b6d4','#84cc16','#a855f7','#f97316','#0ea5e9','#22c55e','#ec4899',
+  '#8b5cf6','#14b8a6','#eab308','#6366f1','#ef4444','#10b981','#3b82f6',
+  '#d946ef','#f59e0b','#64748b','#78716c','#0891b2','#16a34a','#dc2626',
+  '#ca8a04','#7c3aed','#0e7490'];
+
+// ── ÉTAT ─────────────────────────────────────────────────────
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+
+// Construire les objets nœuds depuis ND (tableau compact)
+let nodes = ND.map(r => ({
+  id:r[0], x:r[1], y:r[2], clusterId:r[3], isCH:r[4],
+  distToSink:r[5], clusterIdx:r[6],
+  isAlive:true, energy:2.0, pepmRisk:Math.random()*0.15,
+  qval:0, epsilon:0.9, reward:0, nextHop:-1, steps:0
+}));
+
+// Index rapide
+const byId = {};
+nodes.forEach(n => byId[n.id] = n);
+
+// Vue
+let view='clusters', opts={links:true,labels:true,routes:false,radio:false};
+let zoom=1, panX=0, panY=0;
+let selId=-1, selP1=[], selP2=[];
+let pkts=[];
+let simStep=0, simTime=0;
+let rHist=[], eHist=[];
+let timer=null;
+
+// ── COORD ────────────────────────────────────────────────────
+function toS(x,y){
+  const W=cv.width, H=cv.height;
+  const sc=Math.min(W,H)/AREA*zoom*0.88;
+  const ox=W/2-AREA/2*sc+panX, oy=H/2-AREA/2*sc+panY;
+  return {sx:ox+x*sc, sy:oy+y*sc, sc};
+}
+function toW(sx,sy){
+  const W=cv.width, H=cv.height;
+  const sc=Math.min(W,H)/AREA*zoom*0.88;
+  const ox=W/2-AREA/2*sc+panX, oy=H/2-AREA/2*sc+panY;
+  return {wx:(sx-ox)/sc, wy:(sy-oy)/sc};
+}
+
+// ── ROUTE ────────────────────────────────────────────────────
+function getRoute(nid){
+  const n=byId[nid]; if(!n||!n.isAlive) return{p1:[],p2:[],ok:false};
+  if(n.isCH){
+    const p2=PCS[String(nid)]||[];
+    return{p1:[nid],p2,ok:p2[p2.length-1]===-1};
+  }
+  const p1=PTC[String(nid)]||[nid];
+  const p2=PCS[String(n.clusterId)]||[];
+  return{p1,p2,ok:p2[p2.length-1]===-1};
+}
+
+// ── DRAW ─────────────────────────────────────────────────────
+function draw(){
+  const W=cv.width, H=cv.height;
+  if(W<10||H<10) return;
+  ctx.clearRect(0,0,W,H);
+
+  // Background
+  ctx.fillStyle='#07101e'; ctx.fillRect(0,0,W,H);
+
+  // Grille légère
+  const{sc}=toS(0,0);
+  ctx.strokeStyle='rgba(255,255,255,.02)'; ctx.lineWidth=1;
+  for(let g=0;g<=AREA;g+=100){
+    let{sx:x1,sy:y1}=toS(g,0),{sx:x2,sy:y2}=toS(g,AREA);
+    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    let{sx:x3,sy:y3}=toS(0,g),{sx:x4,sy:y4}=toS(AREA,g);
+    ctx.beginPath();ctx.moveTo(x3,y3);ctx.lineTo(x4,y4);ctx.stroke();
+  }
+
+  // Halos cluster
+  if(view==='clusters'||view==='fed'){
+    const byCI={};
+    nodes.forEach(n=>{if(n.isAlive&&n.isCH){byCI[n.clusterIdx]=n;}});
+    Object.values(byCI).forEach(ch=>{
+      const{sx,sy}=toS(ch.x,ch.y);
+      const r=RADIO*sc*0.7, c=CL[ch.clusterIdx%CL.length];
+      const g=ctx.createRadialGradient(sx,sy,0,sx,sy,r);
+      g.addColorStop(0,ha(c,.07));g.addColorStop(1,ha(c,0));
+      ctx.beginPath();ctx.arc(sx,sy,r,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
+    });
+  }
+
+  // Portée radio nœud sélectionné
+  if(opts.radio&&selId>=0&&byId[selId]){
+    const n=byId[selId],{sx,sy}=toS(n.x,n.y);
+    ctx.beginPath();ctx.arc(sx,sy,RADIO*sc,0,Math.PI*2);
+    ctx.strokeStyle='rgba(0,212,255,.3)';ctx.lineWidth=1.5;
+    ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='rgba(0,212,255,.03)';ctx.fill();
+  }
+
+  // Liens intra-cluster
+  if(opts.links){
+    nodes.forEach(n=>{
+      if(!n.isAlive||n.isCH)return;
+      const ch=byId[n.clusterId]; if(!ch||!ch.isAlive)return;
+      const{sx:x1,sy:y1}=toS(n.x,n.y),{sx:x2,sy:y2}=toS(ch.x,ch.y);
+      ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);
+      ctx.strokeStyle=ha(CL[n.clusterIdx%CL.length],.11);
+      ctx.lineWidth=0.7;ctx.stroke();
+    });
+  }
+
+  // Liens fédérés CH→Sink (vue Fédération)
+  if(view==='fed'){
+    const{sx:ssx,sy:ssy}=toS(SX,SY);
+    nodes.filter(n=>n.isCH&&n.isAlive).forEach(ch=>{
+      const{sx,sy}=toS(ch.x,ch.y);
+      ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ssx,ssy);
+      ctx.strokeStyle='rgba(167,139,250,.3)';ctx.lineWidth=1;
+      ctx.setLineDash([3,3]);ctx.stroke();ctx.setLineDash([]);
+    });
+  }
+
+  // Routes sélectionnées (2 phases)
+  if(opts.routes&&selId>=0){
+    if(selP1.length>1) drawPath(selP1,'rgba(0,255,136,.85)',2.5);
+    if(selP2.length>1) drawPath(selP2,'rgba(0,212,255,.85)',2.5);
+  }
+
+  // Nœuds
+  nodes.forEach(n=>{
+    const{sx,sy}=toS(n.x,n.y);
+    if(!n.isAlive){
+      ctx.beginPath();ctx.arc(sx,sy,2.5,0,Math.PI*2);
+      ctx.fillStyle='rgba(255,56,96,.2)';ctx.fill();return;
+    }
+    let col,r=n.isCH?8:4;
+    if(view==='energy'){
+      const rat=n.energy/2;
+      col=rat>.7?'#00ff88':rat>.3?'#ff8c00':'#ff3860';
+    }else if(view==='risk'){
+      col=n.pepmRisk>.7?'#ff3860':n.pepmRisk>.4?'#ff8c00':'#2a4a7a';
+    }else{
+      col=CL[n.clusterIdx%CL.length];
+    }
+    // Halo sélection
+    if(n.id===selId){
+      ctx.beginPath();ctx.arc(sx,sy,r+8,0,Math.PI*2);
+      ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=1.5;ctx.stroke();
+    }
+    // Highlight route
+    const inP1=selP1.includes(n.id), inP2=selP2.includes(n.id);
+    if(inP1){ctx.beginPath();ctx.arc(sx,sy,r+5,0,Math.PI*2);ctx.strokeStyle='rgba(0,255,136,.7)';ctx.lineWidth=1.5;ctx.stroke();}
+    if(inP2){ctx.beginPath();ctx.arc(sx,sy,r+5,0,Math.PI*2);ctx.strokeStyle='rgba(0,212,255,.7)';ctx.lineWidth=1.5;ctx.stroke();}
+    // Glow CH
+    if(n.isCH){
+      const g=ctx.createRadialGradient(sx,sy,0,sx,sy,r+7);
+      g.addColorStop(0,ha(col,.4));g.addColorStop(1,ha(col,0));
+      ctx.beginPath();ctx.arc(sx,sy,r+7,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
+    }
+    // Corps
+    ctx.beginPath();ctx.arc(sx,sy,r,0,Math.PI*2);
+    ctx.fillStyle=n.isCH?col:ha(col,.75);ctx.fill();
+    // Label CH
+    if(n.isCH&&opts.labels){
+      ctx.fillStyle='rgba(255,255,255,.8)';
+      ctx.font='bold 8px Space Mono,monospace';
+      ctx.textAlign='center';ctx.fillText('#'+n.id,sx,sy-r-3);
+    }
+  });
+
+  // Paquets animés
+  pkts.forEach(p=>{
+    const path=p.path; if(path.length<2)return;
+    const total=path.length-1;
+    const si=Math.min(Math.floor(p.prog*total),total-1);
+    const fr=p.prog*total-si;
+    const gp=id=>id===-1?{sx:toS(SX,SY).sx,sy:toS(SX,SY).sy}:(byId[id]?toS(byId[id].x,byId[id].y):{sx:-999,sy:-999});
+    const a=gp(path[si]),b=gp(path[si+1]);
+    const px=a.sx+(b.sx-a.sx)*fr, py=a.sy+(b.sy-a.sy)*fr;
+    const pc=p.ph===1?'#00ff88':'#00d4ff';
+    ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.fillStyle=pc;ctx.fill();
+    const g=ctx.createRadialGradient(px,py,0,px,py,9);
+    g.addColorStop(0,ha(pc,.4));g.addColorStop(1,ha(pc,0));
+    ctx.beginPath();ctx.arc(px,py,9,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
+  });
+
+  // SINK
+  const{sx:ssx,sy:ssy}=toS(SX,SY);
+  const sg=ctx.createRadialGradient(ssx,ssy,0,ssx,ssy,16);
+  sg.addColorStop(0,'#ffd700');sg.addColorStop(.5,'rgba(255,140,0,.7)');sg.addColorStop(1,'transparent');
+  ctx.beginPath();ctx.arc(ssx,ssy,16,0,Math.PI*2);ctx.fillStyle=sg;ctx.fill();
+  ctx.beginPath();ctx.arc(ssx,ssy,6,0,Math.PI*2);ctx.fillStyle='#ffd700';ctx.fill();
+  ctx.fillStyle='rgba(255,215,0,.9)';ctx.font='bold 9px Space Mono,monospace';
+  ctx.textAlign='center';
+  ctx.fillText('SINK',ssx,ssy-20);ctx.fillText('(500,500)',ssx,ssy+22);
+
+  // Barre échelle
+  const pxM=toS(0,0).sc;
+  const px100=pxM*100;
+  document.getElementById('scaleline').style.width=Math.round(px100)+'px';
+  document.getElementById('scalelbl').textContent=zoom<0.7?'200m':zoom>3?'50m':'100m';
+}
+
+function drawPath(path,color,lw){
+  for(let i=0;i<path.length-1;i++){
+    const gp=id=>id===-1?{x:SX,y:SY}:byId[id];
+    const a=gp(path[i]),b=gp(path[i+1]);
+    if(!a||!b)continue;
+    const{sx:x1,sy:y1}=toS(a.x,a.y),{sx:x2,sy:y2}=toS(b.x,b.y);
+    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);
+    ctx.strokeStyle=color;ctx.lineWidth=lw;ctx.stroke();
+    // flèche milieu
+    const ang=Math.atan2(y2-y1,x2-x1);
+    const mx=(x1+x2)/2,my=(y1+y2)/2;
+    ctx.beginPath();ctx.moveTo(mx,my);
+    ctx.lineTo(mx-9*Math.cos(ang-.36),my-9*Math.sin(ang-.36));
+    ctx.lineTo(mx-9*Math.cos(ang+.36),my-9*Math.sin(ang+.36));
+    ctx.closePath();ctx.fillStyle=color;ctx.fill();
+  }
+}
+
+// ── SIMULATION STEP ────────────────────────────────────────
+function step(){
+  simStep++;simTime+=5;
+  document.getElementById('stime').textContent=`t=${simTime}s · step ${simStep}`;
+  const alive=nodes.filter(n=>n.isAlive);
+
+  alive.forEach(n=>{
+    n.energy=Math.max(0,n.energy-0.00001*(1+n.distToSink/1200));
+    if(n.energy<0.001){n.isAlive=false;addLog('WARN','Nœud #'+n.id+' mort (E→0)');return;}
+    n.pepmRisk=Math.max(0,Math.min(1,(2-n.energy)/2+(Math.random()-.5)*.04));
+    n.epsilon=Math.max(0.1,.9*Math.exp(-.002*simStep));
+    n.qval=.4-.3*(1-n.energy/2)-.2*Math.min(1,n.distToSink/1500)+.1*(1-n.pepmRisk);
+    n.reward+=n.qval;n.steps++;
+  });
+
+  // Paquets phase 1: membre → CH (chemin précalculé BFS)
+  if(simStep%3===0){
+    const mems=alive.filter(n=>!n.isCH);
+    for(let i=0;i<3&&mems.length;i++){
+      const m=mems[Math.floor(Math.random()*mems.length)];
+      const p=PTC[String(m.id)];
+      if(p&&p.length>1) pkts.push({path:p,prog:0,ph:1});
+    }
+  }
+  // Paquets phase 2: CH → sink (chemin précalculé BFS)
+  if(simStep%4===0){
+    const chs=alive.filter(n=>n.isCH);
+    for(let i=0;i<2&&chs.length;i++){
+      const ch=chs[Math.floor(Math.random()*chs.length)];
+      const p=PCS[String(ch.id)];
+      if(p&&p.length>1&&p[p.length-1]===-1) pkts.push({path:p,prog:0,ph:2});
+    }
+  }
+  pkts=pkts.filter(p=>{p.prog+=0.055;return p.prog<1;});
+
+  // Phases pipeline
+  for(let i=0;i<5;i++) document.getElementById('ph'+i).className='ph'+(i===(simStep%5)?' act':'');
+
+  if(simStep%50===0) addLog('FED','FedAvg #'+Math.floor(simStep/50)+' | vivants='+alive.length);
+  if(simStep%15===0){
+    const eps=alive.reduce((s,n)=>s+n.epsilon,0)/Math.max(1,alive.length);
+    addLog('RL','step='+simStep+' ε='+eps.toFixed(3));
+  }
+
+  const meanE=alive.reduce((s,n)=>s+n.energy,0)/Math.max(1,alive.length);
+  const stdE=Math.sqrt(alive.reduce((s,n)=>s+(n.energy-meanE)**2,0)/Math.max(1,alive.length));
+  const eps=alive.reduce((s,n)=>s+n.epsilon,0)/Math.max(1,alive.length);
+  const totR=alive.reduce((s,n)=>s+n.reward,0);
+
+  set('mv-alive',alive.length); set('mp-alive',(alive.length/300*100)+'%','width');
+  set('mv-e',meanE.toFixed(3)+'J'); set('mp-e',(meanE/2*100)+'%','width');
+  set('mv-std',stdE.toFixed(4)); set('mv-eps',eps.toFixed(3)); set('mp-eps',(eps*100)+'%','width');
+  document.getElementById('hp-alive').textContent=alive.length+'/300 vivants';
+
+  rHist.push(totR); eHist.push(eps);
+  if(rHist.length>80){rHist.shift();eHist.shift();}
+  if(selId>=0) updateInspector(selId);
+  drawChart(); draw();
+}
+
+// ── INSPECTOR ──────────────────────────────────────────────
+function updateInspector(nid){
+  const n=byId[nid]; if(!n)return;
+  const rc=n.pepmRisk>.7?'var(--red)':n.pepmRisk>.4?'var(--orange)':'var(--green)';
+  document.getElementById('inspector').innerHTML=
+    row('Node ID','<span style="color:var(--cyan)">#'+n.id+'</span>')+
+    row('Position','('+n.x.toFixed(1)+','+n.y.toFixed(1)+')')+
+    row('Rôle',n.isCH?'<span style="color:var(--cyan)">⬡ Cluster Head</span>':'· Membre')+
+    row('Cluster','CH #'+n.clusterId+' (C'+n.clusterIdx+')')+
+    row('Énergie','<span style="color:var(--orange)">'+n.energy.toFixed(4)+'J</span>')+
+    row('PEPM σ','<span style="color:'+rc+'">'+(n.pepmRisk*100).toFixed(1)+'%</span>')+
+    row('Dist.Sink',n.distToSink.toFixed(0)+'m')+
+    row('Q-value',n.qval.toFixed(4))+
+    row('Steps RL',''+n.steps);
+}
+
+function updateRoute(nid){
+  const{p1,p2,ok}=getRoute(nid);
+  const n=byId[nid]; if(!n)return;
+  let h='';
+  if(!n.isCH){
+    h+=`<div class="rph"><div class="rph-title" style="color:var(--green)">Phase 1 — Intra-cluster · Membre → CH</div><div class="hops">`;
+    p1.forEach((id,i)=>{
+      const cls=i===0?'h-src':id===n.clusterId?'h-ch':'h-rl';
+      h+=`<span class="hop ${cls}">#${id}</span>`;
+      if(i<p1.length-1)h+=`<span class="harr">→</span>`;
+    });
+    h+=`</div><div style="font:9px 'Space Mono',monospace;color:var(--muted);margin-top:4px">${p1.length-1} saut(s) · 150m max/saut</div></div>`;
+  }
+  const chId=n.isCH?n.id:n.clusterId;
+  h+=`<div class="rph"><div class="rph-title" style="color:var(--cyan)">Phase 2 — Inter-cluster · CH #${chId} → Sink</div><div class="hops">`;
+  p2.forEach((id,i)=>{
+    if(id===-1){h+=`<span class="hop h-sk">⬡ SINK</span>`;}
+    else{const cls=i===0?'h-ch':(byId[id]?.isCH?'h-ch':'h-rl');h+=`<span class="hop ${cls}">#${id}</span>`;}
+    if(i<p2.length-1)h+=`<span class="harr">→</span>`;
+  });
+  const hops2=p2.filter(x=>x!==-1).length;
+  h+=`</div><div style="font:9px 'Space Mono',monospace;color:var(--muted);margin-top:4px">${hops2} saut(s) relay · 150m max/saut</div></div>`;
+  const totalH=(n.isCH?0:p1.length-1)+(p2.length-1);
+  h+=`<div class="rstat" style="color:${ok?'var(--green)':'var(--orange)'}">${ok?'✓ Sink atteint · '+totalH+' sauts total':'⚠ Sink non atteint'}</div>`;
+  document.getElementById('routePanel').innerHTML=h;
+}
+
+// ── CHART ──────────────────────────────────────────────────
+function drawChart(){
+  const c=document.getElementById('cchart');
+  c.width=c.offsetWidth;c.height=70;
+  const cx=c.getContext('2d');
+  if(rHist.length<2)return;
+  const W=c.width,H=70;
+  const maxR=Math.max(...rHist,.1),minR=Math.min(...rHist,0);
+  cx.beginPath();
+  rHist.forEach((v,i)=>{
+    const x=(i/(rHist.length-1))*W;
+    const y=H-4-((v-minR)/(maxR-minR+.001))*(H-8);
+    i===0?cx.moveTo(x,y):cx.lineTo(x,y);
+  });
+  cx.strokeStyle='#00ff88';cx.lineWidth=1.8;cx.stroke();
+  cx.lineTo(W,H);cx.lineTo(0,H);cx.closePath();
+  const g=cx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'rgba(0,255,136,.18)');g.addColorStop(1,'transparent');
+  cx.fillStyle=g;cx.fill();
+  cx.beginPath();
+  eHist.forEach((v,i)=>{
+    const x=(i/(eHist.length-1))*W, y=H-4-v*(H-8);
+    i===0?cx.moveTo(x,y):cx.lineTo(x,y);
+  });
+  cx.strokeStyle='rgba(255,140,0,.55)';cx.lineWidth=1.2;
+  cx.setLineDash([3,3]);cx.stroke();cx.setLineDash([]);
+  cx.fillStyle='rgba(100,116,139,.7)';cx.font='8px monospace';
+  cx.textAlign='left';cx.fillText('R cumulée',3,10);
+  cx.fillStyle='rgba(255,140,0,.7)';cx.fillText('ε decay',3,20);
+}
+
+// ── CSV ────────────────────────────────────────────────────
+function loadCSV(e){
+  const f=e.target.files[0];if(!f)return;
+  const errEl=document.getElementById('terr');errEl.style.display='none';
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const lines=ev.target.result.trim().split('\n');
+    const hdr=lines[0].split(',').map(h=>h.trim());
+    if(hdr.includes('NodeId')&&hdr.includes('X')&&hdr.includes('Y')){
+      const chIds=[];
+      const rows=lines.slice(1).map(l=>{
+        const v=l.split(',');const o={};hdr.forEach((h,i)=>o[h]=v[i]?.trim());return o;
+      });
+      rows.forEach(r=>{if(r.IsClusterHead==='1')chIds.push(parseInt(r.NodeId));});
+      chIds.sort((a,b)=>a-b);
+      const idx={};chIds.forEach((id,i)=>idx[id]=i);
+      rows.forEach((r,i)=>{
+        const n=nodes[i];if(!n)return;
+        n.x=parseFloat(r.X);n.y=parseFloat(r.Y);
+        n.clusterId=parseInt(r.ClusterId);n.isCH=parseInt(r.IsClusterHead);
+        n.energy=parseFloat(r.InitEnergy)||2;n.distToSink=parseFloat(r.DistToSink);
+        n.clusterIdx=idx[n.clusterId]??0;n.isAlive=true;
+      });
+      selId=-1;selP1=[];selP2=[];
+      addLog('IFO','Topologie rechargée: '+rows.length+' nœuds, '+chIds.length+' CH');
+      draw();return;
+    }
+    const need=['AliveNodes','PDR','MeanEnergy','AvgDelayMs'];
+    const miss=need.filter(k=>!hdr.includes(k));
+    if(miss.length){errEl.style.display='block';errEl.textContent='⚠ Colonnes: '+miss.join(', ');return;}
+    const rows=lines.slice(1).map(l=>{
+      const v=l.split(',');const o={};hdr.forEach((h,i)=>o[h]=parseFloat(v[i]));return o;
+    });
+    const d=rows[rows.length-1];
+    set('mv-alive',d.AliveNodes||300);set('mv-pdr',(d.PDR||100).toFixed(1)+'%');
+    set('mv-e',(d.MeanEnergy||2).toFixed(3)+'J');set('mv-d',(d.AvgDelayMs||29).toFixed(0)+'ms');
+    set('mp-alive',((d.AliveNodes||300)/300*100)+'%','width');
+    if(rows.length>1){rHist=rows.map(r=>r.PktReceived||0);drawChart();}
+    addLog('METRIC','CSV: PDR='+d.PDR?.toFixed(1)+'% E='+d.MeanEnergy?.toFixed(3)+'J');
+    draw();
+  };
+  reader.readAsText(f);
+}
+
+// ── CONTRÔLES ──────────────────────────────────────────────
+function setView(v){view=v;document.getElementById('hp-view').textContent=v;draw();}
+function tog(k){
+  opts[k]=!opts[k];
+  const btnId={links:'bLinks',labels:'bLabels',routes:'bRoutes',radio:'bRadio'}[k];
+  document.getElementById(btnId)?.classList.toggle('on',opts[k]);
+  draw();
+}
+function resetView(){zoom=1;panX=0;panY=0;draw();}
+function dZoom(f){zoom=Math.max(.3,Math.min(8,zoom*f));draw();}
+
+// ── MOUSE ──────────────────────────────────────────────────
+let drag=false,dx0=0,dy0=0,moved=false;
+cv.addEventListener('mousedown',e=>{drag=true;dx0=e.clientX;dy0=e.clientY;moved=false;});
+cv.addEventListener('mousemove',e=>{
+  if(drag){
+    const dx=e.clientX-dx0,dy=e.clientY-dy0;
+    if(Math.abs(dx)+Math.abs(dy)>3)moved=true;
+    panX+=dx;panY+=dy;dx0=e.clientX;dy0=e.clientY;draw();return;
+  }
+  const rect=cv.getBoundingClientRect();
+  const{wx,wy}=toW(e.clientX-rect.left,e.clientY-rect.top);
+  document.getElementById('coords').textContent=`x=${wx.toFixed(0)}m y=${wy.toFixed(0)}m | zoom ${zoom.toFixed(1)}×`;
+  let best=null,bestD=15/zoom;
+  nodes.forEach(n=>{const d=Math.hypot(n.x-wx,n.y-wy);if(d<bestD){bestD=d;best=n;}});
+  const tip=document.getElementById('tip');
+  if(best){
+    tip.style.display='block';tip.style.left=(e.clientX+14)+'px';tip.style.top=(e.clientY-6)+'px';
+    document.getElementById('tt').textContent='#'+best.id+(best.isCH?' ⬡ CH':'');
+    document.getElementById('tc').textContent='C'+best.clusterIdx+' (CH#'+best.clusterId+')';
+    document.getElementById('te').textContent=best.energy.toFixed(4)+'J';
+    document.getElementById('tsk').textContent=(best.pepmRisk*100).toFixed(1)+'%';
+    document.getElementById('tro').textContent=best.isAlive?(best.isCH?'Cluster Head':'Membre'):'💀 Mort';
+    document.getElementById('tds').textContent=best.distToSink.toFixed(0)+'m';
+  }else{tip.style.display='none';}
+});
+cv.addEventListener('mouseup',e=>{
+  drag=false;if(moved)return;
+  const rect=cv.getBoundingClientRect();
+  const{wx,wy}=toW(e.clientX-rect.left,e.clientY-rect.top);
+  let best=null,bestD=18/zoom;
+  nodes.forEach(n=>{const d=Math.hypot(n.x-wx,n.y-wy);if(d<bestD){bestD=d;best=n;}});
+  if(best){
+    selId=best.id;
+    const{p1,p2}=getRoute(best.id);selP1=p1;selP2=p2;
+    if(!opts.routes){opts.routes=true;document.getElementById('bRoutes').classList.add('on');}
+    updateInspector(best.id);updateRoute(best.id);
+    addLog('RL','Sélectionné #'+best.id+(best.isCH?' CH':' Mem')+' P1:'+p1.length+'h P2:'+p2.filter(x=>x!==-1).length+'h');
+    draw();
+  }
+});
+cv.addEventListener('mouseleave',()=>{document.getElementById('tip').style.display='none';drag=false;});
+cv.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.3,Math.min(8,zoom*(e.deltaY<0?1.15:.87)));draw();},{passive:false});
+
+// ── HELPERS ────────────────────────────────────────────────
+function ha(h,a){
+  const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+function row(k,v){return `<div class="irow"><span class="ik">${k}</span><span class="iv">${v}</span></div>`;}
+function set(id,val,prop='textContent'){
+  const el=document.getElementById(id);if(el){prop==='textContent'?el.textContent=val:el.style[prop]=val;}
+}
+function addLog(tag,msg){
+  const el=document.getElementById('logbox');
+  const tc={IFO:'ti',RL:'tr',FED:'tf',METRIC:'tm',WARN:'tw'};
+  const d=document.createElement('div');d.className='le';
+  d.innerHTML=`<span class="ts">[${simTime}s]</span> <span class="${tc[tag]||'tr'}">[${tag}]</span> ${msg}`;
+  el.insertBefore(d,el.firstChild);
+  while(el.children.length>80)el.removeChild(el.lastChild);
+}
+
+// ── INIT ───────────────────────────────────────────────────
+function initCanvas(){
+  // Forcer la taille du canvas en pixels réels
+  const wrap=document.getElementById('cwrap');
+  const rect=wrap.getBoundingClientRect();
+  if(rect.width<10||rect.height<10){
+    // Layout pas encore prêt, réessayer
+    requestAnimationFrame(initCanvas);return;
+  }
+  cv.width=Math.floor(rect.width);
+  cv.height=Math.floor(rect.height);
+  draw();drawChart();
+  addLog('IFO','30 clusters IFO · 300 nœuds · positions réelles NS-3');
+  addLog('RL','Chemins BFS précalculés · 150m/saut · Membre→CH→Sink');
+  addLog('FED','PDR=100% · E=2.000J · Délai=29ms · 35520 steps ADDQN');
+  timer=setInterval(step,180);
+  // ResizeObserver
+  const ro=new ResizeObserver(entries=>{
+    for(const e of entries){
+      const{width,height}=e.contentRect;
+      if(width>10&&height>10){cv.width=Math.floor(width);cv.height=Math.floor(height);draw();}
+    }
+  });
+  ro.observe(wrap);
+}
+// Attendre que le DOM soit complètement rendu
+requestAnimationFrame(()=>requestAnimationFrame(initCanvas));
+</script>
+</body>
+</html>

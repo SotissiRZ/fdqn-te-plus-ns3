@@ -1,0 +1,14 @@
+# NS-3 build
+build/
+cmake-cache/
+build-support/
+
+# Compilation
+*.o
+*.so
+
+# Logs
+*.log
+
+# OS
+.DS_Store

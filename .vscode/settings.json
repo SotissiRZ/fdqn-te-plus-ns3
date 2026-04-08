@@ -1,0 +1,9 @@
+{
+    "C_Cpp.default.compilerPath": "/usr/bin/gcc",
+    "cSpell.words": [
+        "addqn",
+        "fedmeta"
+    ],
+    "C_Cpp.errorSquiggles": "disabled",
+    "python-envs.defaultEnvManager": "ms-python.python:system"
+}

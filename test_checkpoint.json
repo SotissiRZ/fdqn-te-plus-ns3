@@ -1,0 +1,138 @@
+{
+  "round": 10,
+  "global_model": {
+    "weights": [
+      [
+        [
+          0.1
+        ],
+        [
+          0.1
+        ],
+        [
+          0.1
+        ],
+        [
+          0.1
+        ],
+        [
+          0.1
+        ],
+        [
+          0.1
+        ],
+        [
+          0.1
+        ],
+        [
+          0.1
+        ],
+        [
+          0.1
+        ],
+        [
+          0.1
+        ]
+      ]
+    ],
+    "round": 9,
+    "n_clusters": 3,
+    "total_samples": 12
+  },
+  "prev_model": {
+    "weights": [
+      [
+        [
+          0.1
+        ],
+        [
+          0.1
+        ],
+        [
+          0.1
+        ],
+        [
+          0.1
+        ],
+        [
+          0.1
+        ],
+        [
+          0.1
+        ],
+        [
+          0.1
+        ],
+        [
+          0.1
+        ],
+        [
+          0.1
+        ],
+        [
+          0.1
+        ]
+      ]
+    ],
+    "round": 8,
+    "n_clusters": 3,
+    "total_samples": 12
+  },
+  "history": [
+    {
+      "round": 0,
+      "n_clusters": 3,
+      "total_samples": 12
+    },
+    {
+      "round": 1,
+      "n_clusters": 3,
+      "total_samples": 12
+    },
+    {
+      "round": 2,
+      "n_clusters": 3,
+      "total_samples": 12
+    },
+    {
+      "round": 3,
+      "n_clusters": 3,
+      "total_samples": 12
+    },
+    {
+      "round": 4,
+      "n_clusters": 3,
+      "total_samples": 12
+    },
+    {
+      "round": 5,
+      "n_clusters": 3,
+      "total_samples": 12
+    },
+    {
+      "round": 6,
+      "n_clusters": 3,
+      "total_samples": 12
+    },
+    {
+      "round": 7,
+      "n_clusters": 3,
+      "total_samples": 12
+    },
+    {
+      "round": 8,
+      "n_clusters": 3,
+      "total_samples": 12
+    },
+    {
+      "round": 9,
+      "n_clusters": 3,
+      "total_samples": 12
+    }
+  ],
+  "config": {
+    "fed_period": 10,
+    "meta_alpha": 0.01,
+    "momentum": 0.9
+  }
+}

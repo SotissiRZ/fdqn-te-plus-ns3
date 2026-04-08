@@ -1,0 +1,23 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "compilerPath": "/usr/bin/gcc",
+            "intelliSenseMode": "linux-gcc-x64",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/usr/include",
+                "/usr/local/include",
+                "/usr/include/c++/13",
+                "/usr/include/x86_64-linux-gnu/c++/13",
+                "/usr/lib/gcc/x86_64-linux-gnu/13/include",
+                "/usr/include/x86_64-linux-gnu",
+                "/home/zongo/ns-allinone-3.39/ns-3.39/build/include",
+                "/home/zongo/ns-allinone-3.39/ns-3.39/src"
+            ]
+        }
+    ],
+    "version": 4
+}
