@@ -132,6 +132,12 @@ struct ComparisonMetrics {
     double avgPDR_RL = 0.0;
     double avgPDR_NS3 = 0.0;
 
+    // PDR restreint à la phase stable (avant FND) — référence article
+    uint64_t pdrRL_preFND_emitted   = 0;
+    uint64_t pdrRL_preFND_delivered = 0;
+    bool     pdrRL_preFND_locked    = false;  // vrai dès que FND est atteint
+    double   avgPDR_RL_preFND       = 100.0;  // valeur finale calculée dans main()
+
     // Delay metrics
     std::vector<double> endToEndDelay_ms;
     double avgDelay_ms = 0.0;
@@ -521,7 +527,8 @@ void InitEnergyCSV(std::ofstream& f, const std::string& path) {
          "EnergyMin_J,"      // Énergie min résiduelle (J)
          "EnergyMax_J,"      // Énergie max résiduelle (J)
          "TotalDrained_J,"   // Énergie totale consommée depuis t=0 (J)
-         "PDR_RL_pct,"       // PDR logique ADDQN (%)
+         "PDR_RL_pct,"       // PDR logique ADDQN cumulatif (%)
+         "PDR_RL_round_pct," // PDR logique ADDQN du round courant (%)
          "PDR_NS3_pct,"      // PDR physique FlowMonitor NS-3 (%)
          "AvgDelay_ms,"      // Délai bout-en-bout moyen FlowMonitor (ms)
          "AtRiskPEPM,"       // Nœuds avec risque PEPM > seuil
@@ -588,6 +595,7 @@ struct SimContext {
     EnergySourceContainer*       pSrc;
     std::vector<NodeState>*      pSt;
     NodeContainer*               pSens;
+    NetDeviceContainer*          pDevs;   // ← pour désactiver la radio NS-3 à la mort du nœud
     IFOClustering*               pIfo;
     std::map<uint32_t,uint32_t>* pIdIdx;
     std::map<uint32_t,QAgent>*   pQA;
@@ -601,6 +609,9 @@ struct SimContext {
     uint32_t    topoExportCount  = 0;
     uint64_t    rlPktEmitted     = 0;
     uint64_t    rlPktDelivered   = 0;
+    // Compteurs du round précédent — pour PDR DELTA (par round, pas cumulatif)
+    uint64_t    rlPktEmittedPrev   = 0;
+    uint64_t    rlPktDeliveredPrev = 0;
     std::map<uint32_t, Ptr<Application>> nodeApps;
     double      lastDelayCalcTime = 0.0;
     double      lastPDR_NS3 = 100.0;
@@ -820,14 +831,38 @@ static void InitRLStep() {
 
                 if (!stillAlive && !g_deadNodes.count(ns.id)) {
                     g_deadNodes.insert(ns.id);
+
+                    // 1. Arrêter l'application UDP (plus d'émission)
                     auto itApp = ctx.nodeApps.find(ns.id);
                     if (itApp != ctx.nodeApps.end() && itApp->second) {
                         itApp->second->SetStopTime(Seconds(now));
+                    }
+
+                    // 2. Désactiver la radio NS-3 physiquement — CORRECTION PDR NS-3
+                    // Sans ça, la couche WiFi reste active, OLSR continue à router
+                    // autour du nœud mort et le FlowMonitor affiche 100% en permanence.
+                    for (uint32_t devIdx = 0; devIdx < ctx.pDevs->GetN(); devIdx++) {
+                        Ptr<NetDevice> dev = ctx.pDevs->Get(devIdx);
+                        if (dev->GetNode()->GetId() == ns.id) {
+                            // Mettre le nœud hors ligne au niveau IP (retire les routes OLSR)
+                            Ptr<Ipv4> ipv4 = dev->GetNode()->GetObject<Ipv4>();
+                            if (ipv4) {
+                                int32_t ifIndex = ipv4->GetInterfaceForDevice(dev);
+                                if (ifIndex >= 0) ipv4->SetDown(ifIndex);
+                            }
+                            break;
+                        }
                     }
                     if (!g_fndDone) {
                         g_fndDone = true; g_fndTime = now;
                         g_compMetrics.fndTime = now;
                         NS_LOG_UNCOND("⭐ [FND] Premier nœud mort à t=" << now << "s");
+                    }
+                    // Snapshot PDR pré-FND : on gèle les compteurs au moment exact du FND
+                    if (!g_compMetrics.pdrRL_preFND_locked) {
+                        g_compMetrics.pdrRL_preFND_emitted   = ctx.rlPktEmitted;
+                        g_compMetrics.pdrRL_preFND_delivered = ctx.rlPktDelivered;
+                        g_compMetrics.pdrRL_preFND_locked    = true;
                     }
                     if (!g_hndDone && g_deadNodes.size() >= g_nNodes / 2) {
                         g_hndDone = true; g_hndTime = now;
@@ -987,10 +1022,19 @@ static void InitDoCheck() {
         const double stdE = alive > 0 ? std::sqrt(std::max(0.0, sumE2/alive - meanE*meanE)) : 0.0;
         const double pepmRiskMean = alive > 0 ? sumPepmRisk / alive : 0.0;
 
-        // ===== MÉTRIQUES PDR =====
+        // PDR RL cumulatif (depuis t=0) — référence globale
         double pdrRLNow = 100.0;
         if (ctx.rlPktEmitted > 0)
             pdrRLNow = 100.0 * (double)ctx.rlPktDelivered / ctx.rlPktEmitted;
+
+        // PDR RL du round courant (delta depuis le round précédent)
+        const uint64_t deltaEmitted   = ctx.rlPktEmitted   - ctx.rlPktEmittedPrev;
+        const uint64_t deltaDelivered = ctx.rlPktDelivered - ctx.rlPktDeliveredPrev;
+        const double pdrRLRound = (deltaEmitted > 0)
+            ? 100.0 * (double)deltaDelivered / deltaEmitted
+            : pdrRLNow;  // fallback cumulatif si aucun paquet ce round
+        ctx.rlPktEmittedPrev   = ctx.rlPktEmitted;
+        ctx.rlPktDeliveredPrev = ctx.rlPktDelivered;
 
         // PDR NS-3 via FlowMonitor
         double pdrNS3Now = ctx.lastPDR_NS3;
@@ -1143,7 +1187,8 @@ static void InitDoCheck() {
                 << minE << ","                                                // EnergyMin_J
                 << (alive>0 ? maxE : 0.0) << ","                            // EnergyMax_J
                 << std::setprecision(4) << drainedTotal << ","               // TotalDrained_J
-                << std::setprecision(2) << pdrRLNow << ","                   // PDR_RL_pct
+                << std::setprecision(2) << pdrRLNow << ","                   // PDR_RL_pct (cumulatif)
+                << std::setprecision(2) << pdrRLRound << ","                  // PDR_RL_round_pct (delta)
                 << pdrNS3Now << ","                                           // PDR_NS3_pct
                 << std::setprecision(2) << curDelay << ","                   // AvgDelay_ms
                 << atRisk << ","                                              // AtRiskPEPM
@@ -1273,6 +1318,7 @@ void ExportComparisonMetrics() {
     comp << "LND (90% Node Death)," << g_compMetrics.lndTime << ",s\n";
     comp << "Total Rounds," << g_compMetrics.totalRounds << ",rounds\n";
     comp << "Average PDR RL," << g_compMetrics.avgPDR_RL << ",%\n";
+    comp << "PDR RL pre-FND (stable phase)," << g_compMetrics.avgPDR_RL_preFND << ",%\n";
     comp << "Average PDR NS-3," << g_compMetrics.avgPDR_NS3 << ",%\n";
     comp << "Average End-to-End Delay," << g_compMetrics.avgDelay_ms << ",ms\n";
     comp << "Total Energy Consumed," << g_compMetrics.totalEnergyConsumed_J << ",J\n\n";
@@ -1554,6 +1600,7 @@ int main(int argc, char* argv[]) {
     ctx.pSrc         = &eSources;
     ctx.pSt          = &nodeStates;
     ctx.pSens        = &sensors;
+    ctx.pDevs        = &devs;
     ctx.pIfo         = &ifo;
     ctx.pIdIdx       = &idToIdx;
     ctx.pQA          = &qAgents;
@@ -1572,7 +1619,10 @@ int main(int argc, char* argv[]) {
     Simulator::Schedule(Seconds(FdqnCfg::METRICS_INTERVAL),
                         [](){ doCheck(1); });
 
-    Simulator::Stop(Seconds(p.simDuration));
+    // +0.001 s : NS-3 stoppe AVANT les événements schedulés au même instant exact.
+    // Sans ce delta, le round à t=simDuration (ex: t=3000s) est schedulé mais
+    // jamais exécuté → les fichiers CSV/JSON s'arrêtent 50s avant la fin.
+    Simulator::Stop(Seconds(p.simDuration + 0.001));
     NS_LOG_UNCOND("▶ Simulation démarrée pour (" << p.simDuration << "s)...");
     Simulator::Run();
 
@@ -1608,6 +1658,13 @@ int main(int argc, char* argv[]) {
     if (ctx.rlPktEmitted > 0)
         pdrRL = 100.0 * (double)ctx.rlPktDelivered / ctx.rlPktEmitted;
 
+    // PDR pré-FND (phase stable) — la vraie métrique de performance de routage
+    double pdrRL_preFND = 100.0;
+    if (g_compMetrics.pdrRL_preFND_locked && g_compMetrics.pdrRL_preFND_emitted > 0)
+        pdrRL_preFND = 100.0 * (double)g_compMetrics.pdrRL_preFND_delivered
+                             / g_compMetrics.pdrRL_preFND_emitted;
+    g_compMetrics.avgPDR_RL_preFND = pdrRL_preFND;  // disponible dans ExportComparisonMetrics
+
     NS_LOG_UNCOND("\n╔════════════════════════════════════════════════════════════════╗");
     NS_LOG_UNCOND(  "║        RÉSULTATS FDQN-TE+                                      ║");
     NS_LOG_UNCOND(  "╠════════════════════════════════════════════════════════════════╣");
@@ -1616,7 +1673,10 @@ int main(int argc, char* argv[]) {
     NS_LOG_UNCOND(  "║ Énergie moyenne : " << std::fixed << std::setprecision(4) << meanEFinal << " J");
     NS_LOG_UNCOND(  "║ Énergie totale consommée : " << g_compMetrics.totalEnergyConsumed_J << " J");
     NS_LOG_UNCOND(  "║ PDR (logique RL): " << std::setprecision(1) << pdrRL
-                  << " % (" << ctx.rlPktDelivered << "/" << ctx.rlPktEmitted << ")");
+                  << " % (" << ctx.rlPktDelivered << "/" << ctx.rlPktEmitted << ") [total]");
+    NS_LOG_UNCOND(  "║ PDR (RL pré-FND): " << std::setprecision(1) << pdrRL_preFND
+                  << " % (" << g_compMetrics.pdrRL_preFND_delivered << "/"
+                  << g_compMetrics.pdrRL_preFND_emitted << ") [réseau stable ← référence article]");
     NS_LOG_UNCOND(  "║ PDR (NS-3 phys) : " << std::setprecision(1) << pdr << " %");
     NS_LOG_UNCOND(  "║ Délai moyen     : " << std::setprecision(2) << g_compMetrics.avgDelay_ms << " ms");
     NS_LOG_UNCOND(  "║ Paquets NS-3 émis: " << g_compMetrics.totalPacketsSent);
@@ -1640,6 +1700,7 @@ int main(int argc, char* argv[]) {
                 << "EnergyMean_J," << std::fixed << std::setprecision(6) << meanEFinal << "\n"
                 << "EnergyTotalConsumed_J," << g_compMetrics.totalEnergyConsumed_J << "\n"
                 << "PDR_RL_pct," << std::setprecision(2) << pdrRL << "\n"
+                << "PDR_RL_preFND_pct," << std::setprecision(2) << pdrRL_preFND << "\n"
                 << "PDR_NS3_pct," << std::setprecision(2) << pdr << "\n"
                 << "AvgDelay_ms," << std::setprecision(2) << g_compMetrics.avgDelay_ms << "\n"
                 << "TxPackets," << g_compMetrics.totalPacketsSent << "\n"

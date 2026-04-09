@@ -22,7 +22,7 @@
 
 namespace FdqnCfg {
 
-constexpr double   SIM_DURATION   = 3000.0;  // en secondes
+constexpr double   SIM_DURATION   = 3500.0;  // en secondes
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. RÉSEAU & DÉPLOIEMENT
