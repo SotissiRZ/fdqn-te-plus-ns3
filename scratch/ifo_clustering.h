@@ -22,7 +22,7 @@
  *   ifo.Run(nodeStates, nc);
  *   const auto& clusters = ifo.GetClusters();
  *
- * Placement NS-3 : scratch/ (même dossier que fdqn_te_plus.cc)
+ * Placement NS-3 : scratch
  * ============================================================================= */
 
 #ifndef IFO_CLUSTERING_H
@@ -118,7 +118,7 @@ public:
         uint32_t nc = static_cast<uint32_t>(
                           std::ceil(static_cast<double>(alive) / membresOpt));
 
-        // FIX D1a/D7 : bornes adaptatives au nombre de vivants
+        // bornes adaptatives au nombre de vivants
         // nc_max = min(N_CLUSTERS, alive/MEM_MIN) — pas plus de clusters que possible
         // nc_min = max(2, alive/MEM_MAX) — assure au moins MEM_MAX membres par CH
         const uint32_t ncMax = std::min(
@@ -164,7 +164,7 @@ public:
         Phase3_Exploit(alive);
         Phase4_SelectCH(alive, nClusters);
         Phase5_FormClusters(alive);
-        Phase6_PruneEmpty(alive);   // Supprime les clusters sans membres viables [FIX min=0]
+        Phase6_PruneEmpty(alive);   // Supprime les clusters sans membres viables
     }
 
     // ── Accesseurs ────────────────────────────────────────────────────────────
@@ -217,7 +217,7 @@ public:
 
         // ── Seuil d'énergie dynamique ─────────────────────────────────────────
         // CH_MIN_ENERGY_NORM=0.70 est une constante figée qui devient inapplicable
-        // dès que E_moy du réseau descend sous 0.70×E_INIT (≈ round 16, t=800s) :
+        // dès que E_moy du réseau descend sous 0.70×E_INIT :
         // aucun membre ne passe le filtre → zéro rotations → PEPM sans effet.
         //
         // Solution : seuil relatif à l'énergie moyenne courante des nœuds vivants.
@@ -323,17 +323,17 @@ private:
         const double dMax   = m_areaSize * std::sqrt(2.0);
         const double dSinkMax = dMax;  // normalisation distance sink
 
-        // ── Pré-calcul des distances inter-nœuds voisins (pour dispersion) ──────
+        // Pré-calcul des distances inter-nœuds voisins (pour dispersion) ──────
         // Pour chaque nœud, on calcule sa distance minimale aux autres vivants
         // dans la portée radio. Un nœud isolé obtient un bonus de dispersion.
         // Cela contre la concentration des CH au centre du terrain.
 
         for (auto* n : nodes) {
 
-            // ── W1 : énergie résiduelle normalisée ──────────────────────────────
+            // W1 : énergie résiduelle normalisée ──────────────────────────────
             const double eR = n->NormEnergy(m_eInit);
 
-            // ── W2 : qualité de routage vers le sink ────────────────────────────
+            // W2 : qualité de routage vers le sink ────────────────────────────
             // Utilise 1 - d_sink/d_sink_max  (nœuds proches sink → bon relais)
             // MAIS pondéré par la densité locale pour éviter que TOUS les CH
             // convergent vers le sink.
@@ -355,7 +355,7 @@ private:
             const double densR     = std::min(1.0, static_cast<double>(deg) / FdqnCfg::CLUSTER_OPT);
             const double relayQual = proxSink * std::max(0.3, densR); // min 30% même si peu dense
 
-            // ── W3 : dispersion spatiale ─────────────────────────────────────────
+            // W3 : dispersion spatiale ─────────────────────────────────────────
             // Récompense les nœuds éloignés du centre DE GRAVITÉ de leurs voisins CH.
             // Calcul : distance normalisée du nœud par rapport au centroïde de zone.
             // Plus un nœud est loin du centre → plus il couvre une zone périphérique

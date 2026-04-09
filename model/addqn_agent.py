@@ -1,18 +1,5 @@
 """
 addqn_agent.py — Agent ADDQN (Adaptive Double Deep Q-Network)
-=============================================================
-Version CORRIGÉE — corrections appliquées :
-
-  [FIX-1] Normalisation des récompenses dans [-1, 1] avant stockage replay
-           → les lambdas somment à 1.10 ; on divise par cette somme + clip
-  [FIX-2] État distToSink corrigé (était 1 - d/dMax, maintenant d/dMax cohérent
-           avec BuildState C++ qui retourne distToSink/dMax et PAS 1 - d/dMax)
-  [FIX-3] Q-values exportées réelles (pas placeholder 0.5 figé)
-  [FIX-4] Gradient clipping appliqué AVANT adam_step (ordre corrigé)
-  [FIX-5] Replay buffer : prioritized sampling optionnel via TD-error ranking
-  [FIX-6] Target network : correction hard-copy quand step=0 (div by zero Adam)
-  [FIX-7] epsilon_delta appliqué après learn() (pas lors du select_action)
-  [FIX-8] Thread-safety du AgentPool renforcée (lock sur get_all_params)
 """
 
 import numpy as np
@@ -36,7 +23,7 @@ try:
     _REPLAY_DEFAULT        = _Cfg.REPLAY_SIZE
     _BATCH_DEFAULT         = _Cfg.BATCH_SIZE
     _TARGET_UPDATE_DEFAULT = _Cfg.TARGET_UPDATE
-    # Somme des lambdas pour normalisation récompense [FIX-1]
+    # Somme des lambdas pour normalisation récompense
     _REWARD_NORM = (_Cfg.LAMBDA_PDR + _Cfg.LAMBDA_ENERGY
                     + _Cfg.LAMBDA_DELAY + _Cfg.LAMBDA_SAFE
                     + _Cfg.LAMBDA_HIER)
@@ -90,7 +77,7 @@ class DenseLayer:
         self.m_b = np.zeros_like(self.b); self.v_b = np.zeros_like(self.b)
 
     def adam_update(self, lr: float, t: int, beta1=0.9, beta2=0.999, eps=1e-8):
-        # [FIX-6] t doit être ≥ 1 pour éviter division par 0
+        # t doit être ≥ 1 pour éviter division par 0
         t = max(1, t)
         self.m_W = beta1 * self.m_W + (1 - beta1) * self.dW
         self.v_W = beta2 * self.v_W + (1 - beta2) * self.dW ** 2
@@ -269,8 +256,8 @@ class ADDQNAgent:
         # Statistiques
         self.total_reward       = 0.0
         self.q_variance_history = deque(maxlen=50)
-        self.loss_history       = deque(maxlen=200)    # [FIX-3] historique réel
-        self.q_stats_history    = deque(maxlen=50)     # [FIX-3] vraies Q-values
+        self.loss_history       = deque(maxlen=200)    # historique réel
+        self.q_stats_history    = deque(maxlen=50)     # vraies Q-values
 
     # ── Sélection d'action ────────────────────────────────────────────────────
 
@@ -353,11 +340,11 @@ class ADDQNAgent:
         loss_grad[np.arange(B), actions_clamped] = -2.0 * td_errors / B
         self.online_net.backward(loss_grad)
 
-        # Adam + clipping [FIX-4 : ordre correct]
+        # Adam + clipping [
         self.step += 1
         self.online_net.adam_step(self.lr, self.step)
 
-        # Décroissance des hyperparamètres [FIX-7]
+        # Décroissance des hyperparamètres
         self._decay_epsilon()
         self._decay_lr()
 
@@ -394,9 +381,9 @@ class ADDQNAgent:
             "epsilon":   self.epsilon,
             "n_samples": len(self.memory),
             "weights":   params,
-            "q_stats":   q_stats,           # [FIX-3]
+            "q_stats":   q_stats,
             "mean_loss": (float(np.mean(list(self.loss_history)))
-                          if self.loss_history else 0.0),  # [FIX-3]
+                          if self.loss_history else 0.0),
         }
 
     def set_model_params(self, params_dict: dict):
@@ -480,7 +467,7 @@ class AgentPool:
         losses   = [float(np.mean(list(a.loss_history)))
                     for a in agents if a.loss_history]
 
-        # [FIX-3] Q-stats agrégées réelles
+        # Q-stats agrégées réelles
         q_stats_list = [a.online_net.get_q_stats() for a in agents]
         q_means = [s["mean"] for s in q_stats_list]
 

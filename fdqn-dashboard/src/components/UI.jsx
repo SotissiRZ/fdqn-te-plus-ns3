@@ -1,87 +1,79 @@
+// src/components/UI.jsx
+// Composants UI partagés du dashboard FDQN-TE+
+// Regroupe : Title, KPI, Panel, DropZone, Badge, PDRTooltip
+
 import { useState, useRef } from "react";
 import { C } from "../styles/colors";
 
-/* ─── Composants UI ────────────────────────────────────────────────────────── */
-export const Title = ({ children, accent = C.cyan }) => (
-  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+/* ─── Title ──────────────────────────────────────────────────────────────── */
+export function Title({ children, accent = C.cyan }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
+      <div style={{
+        width: 3, height: 15, background: accent, borderRadius: 2,
+        boxShadow: `0 0 6px ${accent}`
+      }} />
+      <span style={{
+        color: C.txt, fontSize: 11, letterSpacing: 2,
+        textTransform: "uppercase", fontFamily: "'Space Mono', monospace"
+      }}>
+        {children}
+      </span>
+    </div>
+  );
+}
+
+/* ─── KPI card ───────────────────────────────────────────────────────────── */
+export function KPI({ label, value, unit = "", color = C.cyan, sub = "" }) {
+  return (
     <div style={{
-      width: 3,
-      height: 14,
-      background: accent,
-      borderRadius: 2,
-      boxShadow: `0 0 8px ${accent}80`
-    }} />
-    <span style={{
-      color: C.txt,
-      fontSize: 10,
-      letterSpacing: 2,
-      textTransform: "uppercase",
-      fontFamily: "'JetBrains Mono', monospace"
+      background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8,
+      padding: "12px 15px", position: "relative", overflow: "hidden",
+      boxShadow: `0 0 16px ${color}12`
+    }}>
+      <div style={{
+        borderTop: `2px solid ${color}`,
+        position: "absolute", top: 0, left: 0, right: 0
+      }} />
+      <div style={{
+        color: C.dim, fontSize: 9, letterSpacing: 2,
+        textTransform: "uppercase", marginBottom: 4
+      }}>
+        {label}
+      </div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+        <span style={{
+          color, fontSize: 22, fontFamily: "'Space Mono', monospace",
+          fontWeight: 700, lineHeight: 1
+        }}>
+          {value}
+        </span>
+        {unit && <span style={{ color: C.dim, fontSize: 10 }}>{unit}</span>}
+      </div>
+      {sub && <div style={{ color: C.dim, fontSize: 9, marginTop: 3 }}>{sub}</div>}
+    </div>
+  );
+}
+
+/* ─── Panel ──────────────────────────────────────────────────────────────── */
+export function Panel({ children, style = {} }) {
+  return (
+    <div style={{
+      background: C.panel,
+      border: `1px solid ${C.border}`,
+      borderRadius: 8,
+      padding: 14,
+      ...style,
     }}>
       {children}
-    </span>
-  </div>
-);
-
-export const KPI = ({ label, value, unit = "", color = C.cyan, sub = "" }) => (
-  <div style={{
-    background: C.panel,
-    border: `1px solid ${C.border}`,
-    borderRadius: 8,
-    padding: "11px 14px",
-    position: "relative",
-    overflow: "hidden",
-    boxShadow: `0 0 20px ${color}08`
-  }}>
-    <div style={{
-      position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
-      height: 2,
-      background: color,
-      boxShadow: `0 0 8px ${color}`
-    }} />
-    <div style={{
-      color: C.dim,
-      fontSize: 9,
-      letterSpacing: 2,
-      textTransform: "uppercase",
-      marginBottom: 3
-    }}>
-      {label}
     </div>
-    <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-      <span style={{
-        color,
-        fontSize: 20,
-        fontFamily: "'JetBrains Mono', monospace",
-        fontWeight: 700,
-        lineHeight: 1
-      }}>
-        {value}
-      </span>
-      {unit && <span style={{ color: C.dim, fontSize: 9 }}>{unit}</span>}
-    </div>
-    {sub && <div style={{ color: C.dim, fontSize: 9, marginTop: 2 }}>{sub}</div>}
-  </div>
-);
+  );
+}
 
-export const Panel = ({ children, style = {} }) => (
-  <div style={{
-    background: C.panel,
-    border: `1px solid ${C.border}`,
-    borderRadius: 8,
-    padding: 14,
-    ...style
-  }}>
-    {children}
-  </div>
-);
-
-export const DropZone = ({ label, accept, onLoad, hint, color = C.cyan }) => {
+/* ─── DropZone ───────────────────────────────────────────────────────────── */
+export function DropZone({ label, accept, onLoad, hint, color = C.cyan }) {
   const ref = useRef(null);
-  const [drag, setDrag] = useState(false);
+  const [dragging, setDragging] = useState(false);
 
   const read = (f) => {
     if (!f) return;
@@ -92,96 +84,88 @@ export const DropZone = ({ label, accept, onLoad, hint, color = C.cyan }) => {
 
   return (
     <div
-      onDragOver={(e) => {
-        e.preventDefault();
-        setDrag(true);
-      }}
-      onDragLeave={() => setDrag(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDrag(false);
-        read(e.dataTransfer.files[0]);
-      }}
+      onDragOver={e => { e.preventDefault(); setDragging(true); }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={e => { e.preventDefault(); setDragging(false); read(e.dataTransfer.files[0]); }}
       onClick={() => ref.current?.click()}
       style={{
-        border: `1.5px dashed ${drag ? color : C.border}`,
-        borderRadius: 7,
-        padding: "12px 16px",
-        cursor: "pointer",
-        background: drag ? `${color}08` : C.muted,
-        transition: "all .2s",
-        textAlign: "center",
-        boxShadow: drag ? `0 0 16px ${color}30` : "none"
+        border: `2px dashed ${dragging ? color : C.border}`,
+        borderRadius: 7, padding: "13px 16px", cursor: "pointer",
+        background: dragging ? `${color}08` : C.panel,
+        transition: "all .2s", textAlign: "center",
+        boxShadow: dragging ? `0 0 14px ${color}30` : "none"
       }}
     >
-      <div style={{ fontSize: 14, marginBottom: 3 }}>📂</div>
-      <div style={{ color: C.txt, fontSize: 10, marginBottom: 1 }}>{label}</div>
+      <div style={{ fontSize: 15, marginBottom: 4 }}>📂</div>
+      <div style={{ color: C.txt, fontSize: 11, marginBottom: 2 }}>{label}</div>
       <div style={{ color: C.dim, fontSize: 9 }}>{hint}</div>
       <input
-        ref={ref}
-        type="file"
-        accept={accept}
-        style={{ display: "none" }}
-        onChange={(e) => read(e.target.files[0])}
+        ref={ref} type="file" accept={accept} style={{ display: "none" }}
+        onChange={e => read(e.target.files[0])}
       />
     </div>
   );
-};
+}
 
-export const Badge = ({ name, color, onClear }) => (
-  <div style={{
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    background: `${color}12`,
-    border: `1px solid ${color}50`,
-    borderRadius: 5,
-    padding: "3px 9px",
-    fontSize: 9
-  }}>
-    <span style={{ color }}>✓ {name}</span>
-    <span
-      onClick={(e) => {
-        e.stopPropagation();
-        onClear();
-      }}
-      style={{
-        color: C.dim,
-        cursor: "pointer",
-        fontSize: 12,
-        lineHeight: 1
-      }}
-    >
-      ×
-    </span>
-  </div>
-);
-
-export const PDRTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
+/* ─── Badge (fichier chargé) ─────────────────────────────────────────────── */
+export function Badge({ name, color = C.green, onClear }) {
   return (
     <div style={{
-      background: "#060e1a",
-      border: `1px solid ${C.border}`,
-      borderRadius: 6,
-      padding: "8px 12px",
-      fontSize: 10
+      display: "inline-flex", alignItems: "center", gap: 7,
+      background: `${color}10`, border: `1px solid ${color}`,
+      borderRadius: 5, padding: "4px 10px", fontSize: 9,
+      width: "100%", boxSizing: "border-box", justifyContent: "space-between"
     }}>
-      <div style={{ color: C.dim, marginBottom: 4 }}>t = {label}s</div>
-      {payload.map((p) => (
-        <div
-          key={p.name}
-          style={{
-            color: p.color,
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 16
-          }}
-        >
-          <span>{p.name}</span>
-          <span style={{ fontWeight: 700 }}>{p.value?.toFixed(2)}%</span>
-        </div>
-      ))}
+      <span style={{ color, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        ✓ {name}
+      </span>
+      <span
+        onClick={e => { e.stopPropagation(); onClear(); }}
+        style={{ color: C.dim, cursor: "pointer", fontSize: 13, lineHeight: 1, flexShrink: 0 }}
+      >
+        ×
+      </span>
     </div>
   );
-};
+}
+
+/* ─── PDRTooltip (tooltip recharts personnalisé) ─────────────────────────── */
+export function PDRTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload ?? {};
+  return (
+    <div style={{
+      background: "#060e1a", border: `1px solid ${C.border}`,
+      borderRadius: 7, padding: "9px 13px",
+      fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+      minWidth: 200, pointerEvents: "none"
+    }}>
+      <div style={{ color: C.dim, fontSize: 9, marginBottom: 6 }}>t = {label}s</div>
+      {payload.map((p, i) => (
+        <div key={i} style={{
+          display: "flex", justifyContent: "space-between", gap: 14,
+          padding: "2px 0", color: C.dim
+        }}>
+          <span>{p.name}</span>
+          <span style={{ color: p.color ?? C.txt, fontWeight: 700 }}>
+            {typeof p.value === "number" ? `${p.value.toFixed(2)}%` : p.value}
+          </span>
+        </div>
+      ))}
+      {d.alive != null && (
+        <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 5, paddingTop: 5 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 14, fontSize: 9, color: C.dim }}>
+            <span>Vivants</span>
+            <span style={{ color: C.green }}>{d.alive}</span>
+          </div>
+          {d.atRisk > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 14, fontSize: 9, color: C.dim }}>
+              <span>PEPM@risque</span>
+              <span style={{ color: C.red }}>{d.atRisk}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -9,12 +9,6 @@
  * Action : prochain saut parmi les voisins vivants
  * Récompense : λ1*PDR - λ2*E_cost - λ3*delay + λ4*(1-pepm_risk)
  *
- * CORRECTIONS vs version précédente :
- *   ✓ Utilise fdqn_config.h pour les hyperparamètres
- *   ✓ Référence ifo-clustering.h de ce dépôt (pas un dépôt externe)
- *   ✓ ADDQNEnvState inclut ETX calculé (pas hardcodé 0.8)
- *   ✓ Fallback Q-table utilisé si socket TCP indisponible
- *   ✓ FederatedUpdate() : reçoit modèle global et le redistribue
  * ============================================================================= */
 
 #ifndef ADDQN_ROUTING_H

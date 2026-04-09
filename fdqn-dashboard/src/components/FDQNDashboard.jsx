@@ -7,31 +7,13 @@ import {
 import { Title, KPI, Panel, DropZone, Badge, PDRTooltip } from "./UI";
 import { C, tt } from "../styles/colors";
 import { parseEnergy, parseSummary, parseTopo, parseRL, parseRouting } from "../utils/parsers";
-import { clCol } from "../utils/clusterColors";
+import { clCol, hexA } from "../utils/clusterColors";
 
 
 
-// ── Parser fdqnte_routing.csv ──────────────────────────────────────────────────
-
-
-
-// ── Cluster colors (pour TopoCanvas et TopoTab) ──────────────────────────────
-const CLUSTER_COLORS = [
-  "#00d4ff","#00ff88","#ff6b6b","#ffd700","#ff8c00","#a78bfa","#06b6d4",
-  "#84cc16","#f43f5e","#8b5cf6","#0ea5e9","#22c55e","#ec4899","#f97316",
-  "#14b8a6","#eab308","#6366f1","#ef4444","#10b981","#3b82f6","#d946ef",
-  "#f59e0b","#64748b","#fb923c","#e879f9","#0891b2","#16a34a","#dc2626",
-  "#ca8a04","#7c3aed",
-];
-function clusterColor(cid){
-  const idx=(typeof cid==="number"?cid:parseInt(cid)||0)%CLUSTER_COLORS.length;
-  return CLUSTER_COLORS[Math.abs(idx)];
-}
-function hexAlpha(hex,a){
-  if(!hex||!hex.startsWith("#"))return hex;
-  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
-  return `rgba(${r},${g},${b},${a})`;
-}
+// clusterColor + hexAlpha: aliases des fonctions importées depuis clusterColors.js
+const clusterColor = clCol;
+const hexAlpha = hexA;
 
 
 // TopoCanvas — canvas interactif complet (fidèle au code HTML de référence)
@@ -439,7 +421,16 @@ export default function FDQNDashboard() {
   const fndT = summary?.FND_t ?? rows.find(r => r.fnd > 0)?.fnd ?? rl?.metrics?.fnd_time_s ?? 0;
   const hndT = summary?.HND_t ?? rows.find(r => r.hnd > 0)?.hnd ?? rl?.metrics?.hnd_time_s ?? 0;
   const lndT = summary?.LND_t ?? 0;
-  const pdrRL = summary?.PDR_RL_pct ?? last.pdrRL ?? rl?.metrics?.avg_pdr_RL_pct ?? 0;
+  // PDR avant la mort du 1er nœud (phase stable) — métrique principale
+  const pdrPreFND = summary?.PDR_RL_preFND_pct
+    ?? (rows.length ? (() => {
+         const lastSafe = [...rows].reverse().find(r => r.dead === 0);
+         return lastSafe?.pdrRL ?? rows[0]?.pdrRL ?? 0;
+       })() : 0);
+  // PDR final (toute la simulation, inclut la dégradation post-FND)
+  const pdrFinal = summary?.PDR_RL_pct ?? last.pdrRL ?? rl?.metrics?.avg_pdr_RL_pct ?? 0;
+  // Alias : pdrRL pointe sur la métrique principale (pré-FND)
+  const pdrRL = pdrPreFND;
   const N = summary?.N ?? 300;
   const alive = summary?.AliveNodes ?? last.alive ?? N;
   const dead = summary?.DeadNodes ?? last.dead ?? 0;
@@ -545,7 +536,8 @@ export default function FDQNDashboard() {
             {[
               ["FND", fndT ? `${fndT}s` : "—", C.amber],
               ["HND", hndT ? `${hndT}s` : "—", C.purple],
-              ["PDR RL", pdrRL ? `${pdrRL.toFixed(1)}%` : "—", pdrColor],
+              ["PDR pré-FND", pdrPreFND ? `${pdrPreFND.toFixed(1)}%` : "—", pdrColor],
+              ["PDR final", pdrFinal ? `${pdrFinal.toFixed(1)}%` : "—", pdrFinal >= 90 ? C.green : C.amber],
               ["Vivants", alive ? `${alive}/${N}` : "—", C.green],
             ].map(([l, v, c]) => (
               <div key={l} style={{ textAlign: "center" }}>
@@ -589,13 +581,14 @@ export default function FDQNDashboard() {
       </div>
 
       {/* ── KPI CARDS ── */}
-      <div style={{ padding: "12px 20px 0", display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 8 }}>
+      <div style={{ padding: "12px 20px 0", display: "grid", gridTemplateColumns: "repeat(8,1fr)", gap: 8 }}>
         <KPI label="FND" value={fndT ? `${fndT}s` : "—"} color={C.amber} sub="1er nœud mort" />
         <KPI label="HND" value={hndT ? `${hndT}s` : "—"} color={C.purple} sub="50% morts" />
-        <KPI label="PDR RL" value={pdrRL ? `${pdrRL.toFixed(1)}` : "—"} unit="%" color={pdrColor} sub={`${summary?.RL_PktDelivered?.toLocaleString() || "—"}/${summary?.RL_PktEmitted?.toLocaleString() || "—"}`} />
+        <KPI label="LND" value={lndT ? `${lndT}s` : "—"} color={C.red} sub="90% morts" />
+        <KPI label="PDR pré-FND" value={pdrPreFND ? `${pdrPreFND.toFixed(1)}` : "—"} unit="%" color={pdrColor} sub="phase stable" />
+        <KPI label="PDR final" value={pdrFinal ? `${pdrFinal.toFixed(1)}` : "—"} unit="%" color={pdrFinal >= 90 ? C.green : C.amber} sub={`${summary?.RL_PktDelivered?.toLocaleString() || "—"}/${summary?.RL_PktEmitted?.toLocaleString() || "—"}`} />
         <KPI label="Délai E2E" value={summary?.AvgDelay_ms ? `${(+summary.AvgDelay_ms).toFixed(2)}` : last.delay ? `${last.delay.toFixed(2)}` : "—"} unit="ms" color={C.blue} sub="end-to-end" />
         <KPI label="E drainée" value={summary?.EnergyTotalConsumed_J ? `${(+summary.EnergyTotalConsumed_J).toFixed(1)}` : rl?.metrics?.total_energy_consumed_J ? `${rl.metrics.total_energy_consumed_J.toFixed(1)}` : last.drained ? `${last.drained.toFixed(1)}` : "—"} unit="J" color={C.cyan} sub={`moy ${summary?.EnergyMean_J ? (+summary.EnergyMean_J).toFixed(3) : last.energy?.toFixed(3) || "—"}J`} />
-        <KPI label="PEPM@risque" value={rows.length ? (last.atRisk ?? 0) : "—"} unit={rows.length ? " nœuds" : ""} color={(last.atRisk ?? 0) > 50 ? C.red : C.green} sub="seuil 0.70" />
         <KPI label="RL Steps" value={rows.length ? (last.rlSteps||0).toLocaleString() : rl ? (rl.history?.at(-1)?.rlSteps||summary?.RL_Steps||0).toLocaleString() : "—"} color={C.purple} sub={rows.length ? `fed: ${last.fedRound||0}` : rl ? `fed: ${rl.history?.at(-1)?.fedRound||summary?.FedRounds||0}` : "—"} />
       </div>
 
@@ -756,20 +749,21 @@ export default function FDQNDashboard() {
 
             {/* PDR RL évolution */}
             <Panel>
-              <Title accent={C.cyan}>PDR RL (%) — évolution</Title>
+              <Title accent={C.cyan}>PDR RL (%) — évolution temporelle</Title>
               <div style={{ color: C.dim, fontSize: 8, marginBottom: 8, background: `${C.cyan}08`, border: `1px solid ${C.border}`, borderRadius: 5, padding: "5px 8px", lineHeight: 1.7 }}>
-                <span style={{ color: C.cyan }}>PDR RL</span> = paquets livrés selon la topologie LEACH hiérarchique.<br />
-                Décroît progressivement après FND quand les CH meurent.
+                <span style={{ color: pdrColor, fontWeight: 700 }}>{pdrPreFND.toFixed(1)}%</span> avant FND (phase stable) →{" "}
+                <span style={{ color: C.amber }}>{pdrFinal.toFixed(1)}%</span> final (dégradation post-FND incluse)
               </div>
               <ResponsiveContainer width="100%" height={190}>
                 <LineChart data={rows}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                   <XAxis dataKey="time" stroke={C.dim} tick={{ fontSize: 8 }} />
-                  <YAxis stroke={C.dim} tick={{ fontSize: 8 }} domain={rows.length ? [Math.max(0, Math.floor(Math.min(...rows.map(r=>r.pdrRL||100))-1)), 101] : [85, 101]} />
+                  <YAxis stroke={C.dim} tick={{ fontSize: 8 }} domain={rows.length ? [Math.max(0, Math.floor(Math.min(...rows.map(r=>r.pdrRL||100))-2)), 101] : [85, 101]} />
                   <Tooltip content={<PDRTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 8, color: C.dim, paddingTop: 10 }} />
                   <Line type="monotone" dataKey="pdrRL" name="PDR RL" stroke={C.cyan} strokeWidth={2} dot={false} />
-                  <ReferenceLine y={90} stroke={C.amber} strokeDasharray="4 2" label={{ value: "cible 90%", fill: C.amber, fontSize: 8, position: "right" }} />
+                  {pdrPreFND > 0 && <ReferenceLine y={pdrPreFND} stroke={pdrColor} strokeDasharray="6 2" label={{ value: `pré-FND ${pdrPreFND.toFixed(1)}%`, fill: pdrColor, fontSize: 8, position: "right" }} />}
+                  <ReferenceLine y={90} stroke={C.dim} strokeDasharray="4 2" label={{ value: "cible 90%", fill: C.dim, fontSize: 7, position: "insideTopRight" }} />
                   {fndT > 0 && <ReferenceLine x={fndT} stroke={C.amber} strokeDasharray="5 3" label={{ value: "FND", fill: C.amber, fontSize: 8, position: "top" }} />}
                   {hndT > 0 && <ReferenceLine x={hndT} stroke={C.red} strokeDasharray="5 3" label={{ value: "HND", fill: C.red, fontSize: 8, position: "top" }} />}
                 </LineChart>
@@ -781,14 +775,14 @@ export default function FDQNDashboard() {
               <Title accent={C.green}>Statistiques PDR détaillées</Title>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
                 {[
-                  ["PDR RL final",     pdrRL ? `${pdrRL.toFixed(2)}%` : "—",                                                                        pdrColor],
-                  ["PDR moyen sim",    rows.length ? `${(rows.reduce((s,r)=>s+(r.pdrRL||0),0)/rows.length).toFixed(2)}%` : "—",                     C.cyan],
-                  ["PDR min observé",  rows.length ? `${Math.min(...rows.map(r=>r.pdrRL||100)).toFixed(2)}%` : "—",                                 C.red],
-                  ["PDR max observé",  rows.length ? `${Math.max(...rows.map(r=>r.pdrRL||0)).toFixed(2)}%` : "—",                                   C.green],
-                  ["Paquets émis",     summary?.RL_PktEmitted?.toLocaleString() || "—",                                                              C.txt],
-                  ["Paquets livrés",   summary?.RL_PktDelivered?.toLocaleString() || "—",                                                            C.green],
-                  ["Non livrés",       summary?.RL_PktEmitted && summary?.RL_PktDelivered ? (summary.RL_PktEmitted - summary.RL_PktDelivered).toLocaleString() : "—", C.red],
-                  ["Délai E2E moy",    `${summary?.AvgDelay_ms?.toFixed(2) || last.delay?.toFixed(2) || "—"} ms`,                                   C.blue],
+                  ["PDR pré-FND ★",   pdrPreFND ? `${pdrPreFND.toFixed(2)}%` : "—",                                                                   pdrColor],
+                  ["PDR final sim",   pdrFinal ? `${pdrFinal.toFixed(2)}%` : "—",                                                                      pdrFinal >= 90 ? C.green : C.amber],
+                  ["PDR moyen sim",   rows.length ? `${(rows.reduce((s,r)=>s+(r.pdrRL||0),0)/rows.length).toFixed(2)}%` : "—",                         C.cyan],
+                  ["PDR min observé", rows.length ? `${Math.min(...rows.map(r=>r.pdrRL||100)).toFixed(2)}%` : "—",                                     C.red],
+                  ["Paquets émis",    summary?.RL_PktEmitted?.toLocaleString() || "—",                                                                  C.txt],
+                  ["Paquets livrés",  summary?.RL_PktDelivered?.toLocaleString() || "—",                                                               C.green],
+                  ["Non livrés",      summary?.RL_PktEmitted && summary?.RL_PktDelivered ? (summary.RL_PktEmitted - summary.RL_PktDelivered).toLocaleString() : "—", C.red],
+                  ["Délai E2E moy",   `${summary?.AvgDelay_ms?.toFixed(2) || last.delay?.toFixed(2) || "—"} ms`,                                      C.blue],
                 ].map(([k,v,c]) => (
                   <div key={k} style={{ background: C.muted, borderRadius: 5, padding: "7px 9px" }}>
                     <div style={{ color: C.dim, fontSize: 8, marginBottom: 2 }}>{k}</div>
@@ -796,11 +790,20 @@ export default function FDQNDashboard() {
                   </div>
                 ))}
               </div>
-              <div style={{ background: C.muted, borderRadius: 4, height: 8, overflow: "hidden" }}>
-                <div style={{ width: `${Math.min(100, pdrRL)}%`, height: "100%", borderRadius: 4, background: `linear-gradient(90deg,${C.red},${C.amber},${C.green})`, boxShadow: `0 0 8px ${pdrColor}`, transition: "width .5s" }} />
+              <div style={{ fontSize: 8, color: C.dim, marginBottom: 4 }}>
+                <span style={{ color: pdrColor }}>★ PDR pré-FND</span> = métrique principale (avant la mort du 1er nœud)
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8, color: C.dim, marginTop: 3 }}>
-                <span>0%</span><span style={{ color: pdrColor, fontWeight: 700 }}>{pdrRL.toFixed(1)}%</span><span>100%</span>
+              <div style={{ background: C.muted, borderRadius: 4, height: 8, overflow: "hidden", marginBottom: 2 }}>
+                <div style={{ width: `${Math.min(100, pdrPreFND)}%`, height: "100%", borderRadius: 4, background: `linear-gradient(90deg,${C.red},${C.amber},${C.green})`, boxShadow: `0 0 8px ${pdrColor}`, transition: "width .5s" }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8, color: C.dim, marginBottom: 6 }}>
+                <span>0%</span><span style={{ color: pdrColor, fontWeight: 700 }}>{pdrPreFND.toFixed(1)}% (pré-FND)</span><span>100%</span>
+              </div>
+              <div style={{ background: C.muted, borderRadius: 4, height: 5, overflow: "hidden" }}>
+                <div style={{ width: `${Math.min(100, pdrFinal)}%`, height: "100%", borderRadius: 4, background: `linear-gradient(90deg,${C.red},${C.amber},${C.green}60)`, transition: "width .5s" }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8, color: C.dim, marginTop: 2 }}>
+                <span>0%</span><span style={{ color: C.dim }}>{pdrFinal.toFixed(1)}% (final)</span><span>100%</span>
               </div>
             </Panel>
 
@@ -954,6 +957,8 @@ export default function FDQNDashboard() {
                   ["Fed period",      "50 rounds",                                                                   C.purple],
                   ["Batch size",      "64",                                                                          C.purple],
                   // Métriques dynamiques depuis les fichiers chargés
+                  ["PDR pré-FND ★",  pdrPreFND ? `${pdrPreFND.toFixed(2)}%` : "—",                                                                     pdrColor],
+                  ["PDR final",       pdrFinal  ? `${pdrFinal.toFixed(2)}%`  : "—",                                                                     pdrFinal>=90?C.green:C.amber],
                   ["RL Steps total",  rows.length ? (last.rlSteps || 0).toLocaleString() : (rl?.history?.at(-1)?.rlSteps || 0).toLocaleString() || "—",  C.cyan],
                   ["Fed Rounds",      rows.length ? (last.fedRound || 0).toLocaleString() : (rl?.history?.at(-1)?.fedRound || 0).toLocaleString() || "—", C.purple],
                   ["IFO Rounds",      rows.length ? (last.ifoRound || 0).toString() : (summary?.IFO_Rounds || "—").toString(),                            C.amber],
@@ -984,28 +989,35 @@ export default function FDQNDashboard() {
           const topoDead   = topo.filter(n=>!n.isAlive);
           const meanEN     = topoAlive.length?(topoAlive.reduce((a,n)=>a+(n.energyNorm??0),0)/topoAlive.length).toFixed(3):"—";
           const stdE       = last.energyStd??0;
-          const pdrDisp    = summary?.PDR_RL_pct!=null?`${(+summary.PDR_RL_pct).toFixed(1)}%`:(files.topoF||files.topoI)?"—":"—";
+          const pdrDispPre  = pdrPreFND ? `${pdrPreFND.toFixed(1)}%` : "—";
+          const pdrDispFin  = pdrFinal  ? `${pdrFinal.toFixed(1)}%`  : "—";
           const epsilon    = rl?.history?.length?(Math.max(0.05,Math.pow(0.995,rl.history.at(-1)?.rlSteps||0))).toFixed(3):"—";
           const rlSteps    = last.rlSteps || rl?.history?.at(-1)?.rlSteps || 0;
 
           const metrics=[
-            {label:"Vivants",      val:`${topoAlive.length}/${topo.length}`,
-             sub:`${topoDead.length} morts`,   col:C.green,
+            {label:"Vivants",       val:`${topoAlive.length}/${topo.length}`,
+             sub:`${topoDead.length} morts`,      col:C.green,
              pct:topoAlive.length/Math.max(topo.length,1)*100},
-            {label:"CH actifs",    val:`${topo_ch.length}`,
-             sub:"cluster heads",              col:C.cyan,
+            {label:"CH actifs",     val:`${topo_ch.length}`,
+             sub:"cluster heads",                 col:C.cyan,
              pct:topo_ch.length/Math.max(topoAlive.length,1)*100*4},
-            {label:"E moy vivants",val:meanEN+"J",
-             sub:"énergie résiduelle",         col:"#ff8c00",
+            {label:"E moy vivants", val:meanEN+"J",
+             sub:"énergie résiduelle",            col:"#ff8c00",
              pct:parseFloat(meanEN)/2*100},
-            {label:"PEPM@risque",  val:`${atRiskT.length}`,
-             sub:"seuil > 70%",               col:atRiskT.length>0?C.red:C.green,
+            {label:"PDR pré-FND ★", val:pdrDispPre,
+             sub:"phase stable",                  col:pdrColor,
+             pct:pdrPreFND||0},
+            {label:"PDR final",     val:pdrDispFin,
+             sub:"toute simulation",              col:pdrFinal>=90?C.green:C.amber,
+             pct:pdrFinal||0},
+            {label:"PEPM@risque",   val:`${atRiskT.length}`,
+             sub:"seuil > 70%",                   col:atRiskT.length>0?C.red:C.green,
              pct:atRiskT.length/Math.max(topoAlive.length,1)*100},
-            {label:"Moy dist Sink",val:topoAlive.length?`${(topoAlive.reduce((s,n)=>s+(n.distToSink??0),0)/topoAlive.length).toFixed(0)}m`:"—",
-             sub:"distance au sink",          col:C.purple,
+            {label:"Moy dist Sink", val:topoAlive.length?`${(topoAlive.reduce((s,n)=>s+(n.distToSink??0),0)/topoAlive.length).toFixed(0)}m`:"—",
+             sub:"distance au sink",              col:C.purple,
              pct:null},
-            {label:"Fitness moy",  val:topo_ch.length?`${(topo_ch.reduce((s,n)=>s+(n.fitness??0),0)/topo_ch.length).toFixed(3)}`:"—",
-             sub:"IFO clusters",              col:C.purple,
+            {label:"Fitness moy",   val:topo_ch.length?`${(topo_ch.reduce((s,n)=>s+(n.fitness??0),0)/topo_ch.length).toFixed(3)}`:"—",
+             sub:"IFO clusters",                  col:C.purple,
              pct:topo_ch.length?(topo_ch.reduce((s,n)=>s+(n.fitness??0),0)/topo_ch.length)/1.5*100:0},
           ];
 
@@ -1063,17 +1075,17 @@ export default function FDQNDashboard() {
 
         <div style={{background:C.panel,border:`1px solid ${C.border}`,borderRadius:8,padding:10}}>
           <Title accent={C.amber}>Statistiques topologie</Title>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
             {metrics.map(m=>(
               <div key={m.label} style={{background:"#0f1e30",border:`1px solid ${C.border}`,
-                borderRadius:6,padding:"7px 9px"}}>
-                <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,
-                  color:C.dim,marginBottom:2}}>{m.label}</div>
-                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:15,fontWeight:700,
+                borderRadius:6,padding:"6px 8px"}}>
+                <div style={{fontSize:8,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,
+                  color:C.dim,marginBottom:1}}>{m.label}</div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:13,fontWeight:700,
                   color:m.col,lineHeight:1}}>{m.val}</div>
-                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,color:C.dim,marginTop:1}}>{m.sub}</div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:8,color:C.dim,marginTop:1}}>{m.sub}</div>
                 {m.pct!=null&&(
-                  <div style={{height:3,background:C.muted,borderRadius:2,marginTop:4,overflow:"hidden"}}>
+                  <div style={{height:2,background:C.muted,borderRadius:2,marginTop:3,overflow:"hidden"}}>
                     <div style={{width:`${Math.min(100,m.pct)}%`,height:"100%",background:m.col,borderRadius:2}}/>
                   </div>
                 )}
@@ -1225,12 +1237,12 @@ export default function FDQNDashboard() {
                 {/* KPIs routing */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 8 }}>
                   {[
-                    ["Total paquets", routing.summary.totalPackets.toLocaleString(), C.cyan,   "traces"],
-                    ["Livrés",        routing.summary.delivered.toLocaleString(),    C.green,  `${routing.summary.pdrGlobal}%`],
-                    ["Non livrés",    routing.summary.nonDelivered,                  routing.summary.nonDelivered > 0 ? C.red : C.green, "pertes"],
-                    ["PDR global",    `${routing.summary.pdrGlobal}%`,               routing.summary.pdrGlobal > 99 ? C.green : C.amber, "logique"],
-                    ["E drain moy",   `${(routing.summary.drainMoy*1000).toFixed(2)}mJ`, C.amber, "par nœud total"],
-                    ["Nœuds actifs",  routing.summary.nNodes,                        C.purple, `${routing.summary.nCHActive} CH`],
+                    ["Total paquets",  routing.summary.totalPackets.toLocaleString(),        C.cyan,                                                               "traces RL"],
+                    ["Livrés",         routing.summary.delivered.toLocaleString(),           C.green,                                                              `${routing.summary.pdrGlobal}% (logique)`],
+                    ["Non livrés",     routing.summary.nonDelivered,                         routing.summary.nonDelivered > 0 ? C.red : C.green,                   "pertes"],
+                    ["PDR pré-FND ★",  pdrPreFND ? `${pdrPreFND.toFixed(1)}%` : `${routing.summary.pdrGlobal}%`, pdrColor,                                       "phase stable"],
+                    ["E drain moy",    `${(routing.summary.drainMoy*1000).toFixed(2)}mJ`,   C.amber,                                                              "par nœud total"],
+                    ["Nœuds actifs",   routing.summary.nNodes,                               C.purple,                                                             `${routing.summary.nCHActive} CH`],
                   ].map(([l, v, c, sub]) => (
                     <div key={l} style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8,
                       padding: "10px 13px", position: "relative", overflow: "hidden" }}>

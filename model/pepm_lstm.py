@@ -1,9 +1,5 @@
 """
 pepm_lstm.py — PEPM (Predictive Energy Proactive Mechanism)
-Version corrigée avec :
-✓ Modèle hybride LSTM (structure) mais apprentissage simplifié (EWMA)
-✓ Documentation des limitations
-✓ Intégration avec IFO pour re-clustering
 """
 
 import numpy as np
@@ -52,7 +48,7 @@ class LSTMCell:
         self.bo = np.zeros(hidden_dim)
 
     def forward(self, x: np.ndarray, h_prev: np.ndarray, c_prev: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Propagation avant (pour inférence)"""
+        # Propagation avant
         concat = np.concatenate([x, h_prev])
 
         f = 1.0 / (1.0 + np.exp(-(concat @ self.Wf + self.bf)))
@@ -71,7 +67,7 @@ class LSTMCell:
 # ============================================================
 
 class Dense:
-    """Couche dense simple"""
+    # Couche dense
 
     def __init__(self, in_dim: int, out_dim: int, activation: str = None):
         scale = math.sqrt(2.0 / in_dim)
@@ -80,7 +76,7 @@ class Dense:
         self.activation = activation
 
     def forward(self, x: np.ndarray) -> np.ndarray:
-        """Propagation avant"""
+        # Propagation avant
         z = x @ self.W + self.b
 
         if self.activation == "relu":
@@ -114,7 +110,7 @@ class PEPMModule:
         hidden_dim: int = FdqnConfig.PEPM_HIDDEN,
         te_max: float = FdqnConfig.PEPM_TE_MAX,
         alpha: float = FdqnConfig.PEPM_ALPHA,
-        e_init: float = FdqnConfig.E_INIT   # ← depuis config (était 2.0 hardcodé)
+        e_init: float = FdqnConfig.E_INIT
     ):
         self.node_id = node_id
         self.window = window
@@ -142,8 +138,7 @@ class PEPMModule:
 
         # Statistiques
         self.risk_history = deque(maxlen=100)
-        # BUG FIX: risque initial = 0.0 (nœud frais, pas à risque)
-        # L'ancienne valeur 0.5 faisait déclencher des fausses alertes PEPM dès le démarrage
+        # risque initial = 0.0 (nœud frais, pas à risque)
         self.current_risk = 0.0
         self.current_threshold = 0.0
 
@@ -377,7 +372,7 @@ class PEPMPool:
                 node_id,
                 window=self.window,
                 hidden_dim=self.hidden_dim,
-                e_init=self.e_init          # BUG FIX: e_init n'était pas propagé
+                e_init=self.e_init
             )
         return self.modules[node_id]
 

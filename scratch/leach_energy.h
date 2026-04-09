@@ -12,7 +12,7 @@
  *   2. NS-3 BasicEnergySource : consommation physique WiFi via courants.
  *      Utilisé uniquement pour EnergyCallback (cohérence avec NS-3).
  *
- * Placement NS-3 : scratch/ (même dossier que fdqn_te_plus.cc)
+ * Placement NS-3 : scratch/
  * ============================================================================= */
 
 #ifndef LEACH_ENERGY_H
@@ -149,8 +149,8 @@ struct EnergyState {
  *
  *   k_opt = sqrt(N / (2π)) * sqrt(ε_fs / ε_da) * (A / d_toBS²)
  *
- * Note : dans FDQN-TE+, nClusters est calculé depuis la topologie réelle
- * (degré moyen, portée radio) pour garantir 8–12 membres/cluster.
+ * Note : dans FDQN-TE+, nClusters est calculé de mpuis la topologie réelle
+ * (degré moyen, portée radio) pour garantir 5–20 embres/cluster.
  * Cette formule sert de référence théorique (documentation).
  *
  * @param N       Nombre de nœuds vivants

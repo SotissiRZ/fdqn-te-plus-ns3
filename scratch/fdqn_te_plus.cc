@@ -18,7 +18,7 @@
  * Usage :
  *   Copier scratch/ et modules/ dans <ns3>/scratch/
  *   ./ns3 run scratch/fdqn_te_plus
- *   ./ns3 run "scratch/fdqn_te_plus --nNodes=400 --initEnergy=1.2 --simDuration=3500 --areaSize=500"
+ *   ./ns3 run "scratch/fdqn_te_plus --nNodes=400 --initEnergy=1.2 --simDuration=3500 --areaSize=1000"
  * ============================================================================= */
 
 // ── Modules NS-3 ──────────────────────────────────────────────────────────────
@@ -595,7 +595,7 @@ struct SimContext {
     EnergySourceContainer*       pSrc;
     std::vector<NodeState>*      pSt;
     NodeContainer*               pSens;
-    NetDeviceContainer*          pDevs;   // ← pour désactiver la radio NS-3 à la mort du nœud
+    NetDeviceContainer*          pDevs;   // pour désactiver la radio NS-3 à la mort du nœud
     IFOClustering*               pIfo;
     std::map<uint32_t,uint32_t>* pIdIdx;
     std::map<uint32_t,QAgent>*   pQA;
@@ -912,7 +912,7 @@ static void InitRLStep() {
                         : 1.0;
                 }
 
-                // FIX #1: PDR signal réel (±1) — agent pénalise les paquets perdus
+                //  PDR signal réel (±1) — agent pénalise les paquets perdus
                 const double pdrSignal = nhState.isAlive ? 1.0 : -1.0;
                 const double reward
                     = FdqnCfg::LAMBDA_PDR    * pdrSignal
@@ -1009,9 +1009,7 @@ static void InitDoCheck() {
                 minE   = std::min(minE, ns.energy);
                 maxE   = std::max(maxE, ns.energy);
                 sumPepmRisk += ns.pepmRisk;
-                // BUG B FIX: atRisk uniquement pour nœuds VIVANTS
-                // Les nœuds morts gardent leur dernière pepmRisk Python reçue
-                // (souvent élevée) — les inclure fausserait la métrique.
+                //  atRisk uniquement pour nœuds VIVANTS
                 if (ns.pepmRisk > FdqnCfg::PEPM_RISK_THRESHOLD) atRisk++;
             }
             drainedTotal += (ctx.initEnergy - ns.energy);
@@ -1125,7 +1123,7 @@ static void InitDoCheck() {
 
         g_rlHistory.push_back(entry);
 
-        // BUG D FIX: Lambda de mise à jour distToSink après tout recluster
+        // Lambda de mise à jour distToSink après tout recluster
         // distToSink est utilisé par la fitness IFO, la récompense ADDQN et
         // le drain énergétique LeachCHRound. Il doit refléter la position
         // réelle du sink, surtout si areaSize ou sinkX/Y varient via CLI.
@@ -1136,7 +1134,7 @@ static void InitDoCheck() {
             }
         };
 
-        // FIX #8: Re-clustering proactif PEPM — déclenché à chaque round si CH à risque
+        // Re-clustering proactif PEPM — déclenché à chaque round si CH à risque
         if (alive > 0 && atRisk > 0) {
             uint32_t rotations = ctx.pIfo->TriggerProactiveRecluster(*ctx.pSt);
             if (rotations > 0) {
@@ -1150,7 +1148,7 @@ static void InitDoCheck() {
         if (round % 2 == 0 && alive > 0) {
             const uint32_t newNC = ctx.pIfo->ComputeNClusters(*ctx.pSt);
             ctx.pIfo->Run(*ctx.pSt, newNC);
-            updateDistToSink();  // BUG D FIX
+            updateDistToSink();
 
             if (g_rl.IsConnected())
                 g_rl.SendTopology(ctx.pIfo->GetClusters());
@@ -1431,9 +1429,9 @@ int main(int argc, char* argv[]) {
 
     InitResultsDirs(p.resultsDir);
 
-    NS_LOG_UNCOND("╔════════════════════════════════════════════════════════════════╗");
-    NS_LOG_UNCOND("║          FDQN-TE+ — Démarrage                                  ║");
-    NS_LOG_UNCOND("╚════════════════════════════════════════════════════════════════╝");
+    NS_LOG_UNCOND("╔══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗");
+    NS_LOG_UNCOND("║                                                     FDQN-TE+ — Démarrage                                                             ║");
+    NS_LOG_UNCOND("╚══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝");
     NS_LOG_UNCOND("  Nœuds    : " << p.nNodes
                   << "   Énergie: " << p.initEnergy << " J"
                   << "   Durée  : " << p.simDuration << " s"
@@ -1441,7 +1439,7 @@ int main(int argc, char* argv[]) {
                   << "   Zone   : " << p.areaSize << " m"
                   << "   Seed   : " << p.seed
                   << "   Seuil PEPM : " << FdqnCfg::PEPM_RISK_THRESHOLD);
-    NS_LOG_UNCOND("────────────────────────────────────────────────────────────────");
+    NS_LOG_UNCOND("────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────");
 
     g_nNodes = p.nNodes;
     g_rl.Connect();
@@ -1596,7 +1594,7 @@ int main(int argc, char* argv[]) {
     ctx.sinkX        = p.sinkX;
     ctx.sinkY        = p.sinkY;
     ctx.areaSize     = p.areaSize;
-    ctx.seed         = p.seed;          // BUG C FIX
+    ctx.seed         = p.seed;
     ctx.pSrc         = &eSources;
     ctx.pSt          = &nodeStates;
     ctx.pSens        = &sensors;
@@ -1665,18 +1663,18 @@ int main(int argc, char* argv[]) {
                              / g_compMetrics.pdrRL_preFND_emitted;
     g_compMetrics.avgPDR_RL_preFND = pdrRL_preFND;  // disponible dans ExportComparisonMetrics
 
-    NS_LOG_UNCOND("\n╔════════════════════════════════════════════════════════════════╗");
-    NS_LOG_UNCOND(  "║        RÉSULTATS FDQN-TE+                                      ║");
-    NS_LOG_UNCOND(  "╠════════════════════════════════════════════════════════════════╣");
+    NS_LOG_UNCOND("\n╔══════════════════════════════════════════════════════╗");
+    NS_LOG_UNCOND(  "║                    RÉSULTATS FDQN-TE+                ║");
+    NS_LOG_UNCOND(  "╠══════════════════════════════════════════════════════╣");
     NS_LOG_UNCOND(  "║ Nœuds vivants   : " << alive << " / " << p.nNodes);
     NS_LOG_UNCOND(  "║ Nœuds morts     : " << g_deadNodes.size());
     NS_LOG_UNCOND(  "║ Énergie moyenne : " << std::fixed << std::setprecision(4) << meanEFinal << " J");
     NS_LOG_UNCOND(  "║ Énergie totale consommée : " << g_compMetrics.totalEnergyConsumed_J << " J");
     NS_LOG_UNCOND(  "║ PDR (logique RL): " << std::setprecision(1) << pdrRL
-                  << " % (" << ctx.rlPktDelivered << "/" << ctx.rlPktEmitted << ") [total]");
+                  << " % (" << ctx.rlPktDelivered << "/" << ctx.rlPktEmitted << ") [Fin Simulation]");
     NS_LOG_UNCOND(  "║ PDR (RL pré-FND): " << std::setprecision(1) << pdrRL_preFND
                   << " % (" << g_compMetrics.pdrRL_preFND_delivered << "/"
-                  << g_compMetrics.pdrRL_preFND_emitted << ") [réseau stable ← référence article]");
+                  << g_compMetrics.pdrRL_preFND_emitted << ") [réseau stable]");
     NS_LOG_UNCOND(  "║ PDR (NS-3 phys) : " << std::setprecision(1) << pdr << " %");
     NS_LOG_UNCOND(  "║ Délai moyen     : " << std::setprecision(2) << g_compMetrics.avgDelay_ms << " ms");
     NS_LOG_UNCOND(  "║ Paquets NS-3 émis: " << g_compMetrics.totalPacketsSent);
@@ -1687,7 +1685,7 @@ int main(int argc, char* argv[]) {
     NS_LOG_UNCOND(  "║ FND             : " << (g_fndDone ? std::to_string(g_fndTime) + "s" : "—"));
     NS_LOG_UNCOND(  "║ HND             : " << (g_hndDone ? std::to_string(g_hndTime) + "s" : "—"));
     NS_LOG_UNCOND(  "║ LND (90%)       : " << (g_lndDone ? std::to_string(g_lndTime) + "s" : "—"));
-    NS_LOG_UNCOND(  "╚════════════════════════════════════════════════════════════════╝");
+    NS_LOG_UNCOND(  "╚══════════════════════════════════════════════════════╝");
 
     // Export résumé final
     {

@@ -1,10 +1,5 @@
 """
 fedmeta_drl.py — FedMeta-DRL (Federated Meta Deep Reinforcement Learning)
-Version corrigée avec :
-✓ Sauvegarde/restauration des checkpoints
-✓ Agrégation pondérée correcte
-✓ Méta-apprentissage amélioré
-✓ Gestion des modèles vides
 """
 
 import numpy as np
@@ -124,11 +119,11 @@ class FedMetaDRLServer:
     # --------------------------------------------------------
 
     def receive_node_model(self, node_id: int, params: Dict[str, Any]):
-        """Reçoit le modèle d'un nœud"""
+        # Reçoit le modèle d'un nœud
         self.node_models[node_id] = params.copy()
 
     def receive_cluster_model(self, cluster_id: int, params: Dict[str, Any]):
-        """Reçoit le modèle d'un cluster (CH)"""
+        # Reçoit le modèle d'un cluster (CH)
         self.cluster_models[cluster_id] = params.copy()
 
     # --------------------------------------------------------
@@ -288,7 +283,7 @@ class FedMetaDRLServer:
     # --------------------------------------------------------
 
     def save_checkpoint(self, path: str):
-        """Sauvegarde un checkpoint du serveur"""
+        # Sauvegarde un checkpoint du serveur
         checkpoint = {
             "round": self.round,
             "global_model": self.global_model,
@@ -306,7 +301,7 @@ class FedMetaDRLServer:
             json.dump(checkpoint, f, indent=2)
 
     def load_checkpoint(self, path: str):
-        """Charge un checkpoint"""
+        # Charge un checkpoint
         with open(path) as f:
             cp = json.load(f)
 
@@ -316,7 +311,7 @@ class FedMetaDRLServer:
         self.round_history = deque(cp["history"], maxlen=100)
 
     def get_stats(self) -> Dict[str, Any]:
-        """Statistiques du serveur"""
+        # Statistiques du serveur
         return {
             "current_round": self.round,
             "clusters_in_buffer": len(self.cluster_models),
@@ -331,20 +326,18 @@ class FedMetaDRLServer:
 # ============================================================
 
 class FederatedOrchestrator:
-    """
-    Orchestrateur qui coordonne les rounds fédérés
-    """
+    # Orchestrateur qui coordonne les rounds fédérés
 
     def __init__(self, fed_period: int = FdqnConfig.FED_PERIOD):
         self.server = FedMetaDRLServer(fed_period)
         self.step = 0
 
     def step_advance(self):
-        """Avance d'un pas de simulation"""
+        # Avance d'un pas de simulation
         self.step += 1
 
     def should_run(self) -> bool:
-        """Vérifie si un round doit être exécuté"""
+        # Vérifie si un round doit être exécuté
         return self.server.should_aggregate(self.step)
 
     def run_federation_round(

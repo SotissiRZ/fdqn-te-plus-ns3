@@ -1,6 +1,5 @@
 """
 rl_server.py — Serveur RL pour FDQN-TE+ (NS-3)
-Version corrigée avec compatibilité addqn_agent.py
 """
 
 import json
@@ -12,7 +11,7 @@ import sys
 from typing import Dict, Any, Optional
 from collections import deque
 
-# Importer nos modules
+# Import des modules
 try:
     from fdqn_config import FdqnConfig
     from addqn_agent import AgentPool
@@ -36,9 +35,9 @@ class FDQNServer:
 
     def __init__(self):
         # Configuration
-        self.e_init = FdqnConfig.E_INIT
-        self.n_nodes = FdqnConfig.N_NODES
-        self.n_clusters = FdqnConfig.N_CLUSTERS
+        self.e_init = FdqnConfig.E_INIT    # Energie initial
+        self.n_nodes = FdqnConfig.N_NODES  # Nombred de Noeuds
+        self.n_clusters = FdqnConfig.N_CLUSTERS # Nombre de clusters MAX
 
         # Pool d'agents ADDQN - adapter les paramètres à addqn_agent.py
         self.agent_pool = AgentPool(
@@ -48,7 +47,7 @@ class FDQNServer:
             lr=FdqnConfig.LR,
             epsilon_max=FdqnConfig.EPSILON_MAX,
             epsilon_min=FdqnConfig.EPSILON_MIN,
-            epsilon_delta=FdqnConfig.EPSILON_DELTA,   # ← décroissance linéaire correcte
+            epsilon_delta=FdqnConfig.EPSILON_DELTA,   # décroissance linéaire
             epsilon_decay=FdqnConfig.EPSILON_DECAY,
             batch_size=FdqnConfig.BATCH_SIZE,
             replay_size=FdqnConfig.REPLAY_SIZE,
@@ -58,12 +57,12 @@ class FDQNServer:
             target_update=FdqnConfig.TARGET_UPDATE
         )
 
-        # Pool PEPM — e_init transmis pour normalisation correcte
+        # Pool PEPM — e_init transmis pour normalisation
         self.pepm_pool = PEPMPool(
             window=FdqnConfig.PEPM_WINDOW,
             hidden_dim=FdqnConfig.PEPM_HIDDEN,
             risk_threshold=FdqnConfig.PEPM_RISK_THRESHOLD,
-            e_init=FdqnConfig.E_INIT              # ← synchronisé avec config
+            e_init=FdqnConfig.E_INIT
         )
 
         # Orchestrateur fédéré
@@ -241,8 +240,8 @@ class FDQNServer:
 
             # update_node retourne le seuil, mais on veut le risque
             self.pepm_pool.update_node(nid, energy)
-            risk = self.pepm_pool.get_risk(nid)  # ← déjà fait
-            risks[nid] = float(max(0.0, min(1.0, risk)))  # ← clamp
+            risk = self.pepm_pool.get_risk(nid)  #
+            risks[nid] = float(max(0.0, min(1.0, risk)))  # clamp
             if risk > FdqnConfig.PEPM_RISK_THRESHOLD:
                 at_risk.append(nid)
 
