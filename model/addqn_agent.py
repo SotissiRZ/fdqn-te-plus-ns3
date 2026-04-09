@@ -42,7 +42,7 @@ try:
                     + _Cfg.LAMBDA_HIER)
 except ImportError:
     _STATE_DIM_DEFAULT     = 10
-    _MAX_NEIGHBORS_DEFAULT = 15
+    _MAX_NEIGHBORS_DEFAULT = 12   # = CLUSTER_MEM_MAX (sync fdqn_config.py MAX_NEIGHBORS)
     _GAMMA_DEFAULT         = 0.99
     _LR_DEFAULT            = 3e-4
     _EPS_MAX_DEFAULT       = 0.9
@@ -52,7 +52,7 @@ except ImportError:
     _REPLAY_DEFAULT        = 10000
     _BATCH_DEFAULT         = 64
     _TARGET_UPDATE_DEFAULT = 100
-    _REWARD_NORM           = 1.00   # 0.45+0.20+0.10+0.10+0.15 = 1.00 ✓
+    _REWARD_NORM           = 1.00   # 0.45+0.20+0.10+0.10+0.15 = 1.00
 
 
 # ─── Couche Dense ─────────────────────────────────────────────────────────────

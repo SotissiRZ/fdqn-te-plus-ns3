@@ -35,7 +35,6 @@
  * @return        Énergie consommée en Joules
  *
  * Formule : E_tx = bits * E_ELEC + bits * E_AMP * dist²
- *   - E_ELEC = 50 nJ/bit  (circuits émetteur)
  *   - E_AMP  = 10 pJ/bit/m² (amplificateur en espace libre)
  */
 inline double LeachEtx(uint32_t bits, double dist) {

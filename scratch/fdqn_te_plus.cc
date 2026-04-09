@@ -211,18 +211,10 @@ public:
         return true;
     }
 
-    // [FIX-PEPM-C1] Structure de retour enrichie : action + risque PEPM calculé côté Python
-    struct ActionResult {
-        int    actionIdx   = 0;
-        double pepmRisk    = 0.0;   // Risque PEPM mis à jour par Python sur cet appel
-        bool   pepmAtRisk  = false; // true si pepmRisk > PEPM_RISK_THRESHOLD
-    };
-
-    ActionResult RequestAction(const std::vector<double>& state,
-                               const std::vector<uint32_t>& neighbors,
-                               uint32_t nodeId = 0) {
-        ActionResult result;
-        if (!m_connected || neighbors.empty()) return result;
+    int RequestAction(const std::vector<double>& state,
+                      const std::vector<uint32_t>& neighbors,
+                      uint32_t nodeId = 0) {
+        if (!m_connected || neighbors.empty()) return 0;
 
         std::ostringstream os;
         os << "{\"cmd\":\"action\",\"node_id\":" << nodeId << ",\"state\":[";
@@ -233,97 +225,102 @@ public:
             os << (i ? "," : "") << neighbors[i];
         os << "]}\n";
 
-        if (!SendLine(os.str())) return result;
+        if (!SendLine(os.str())) return 0;
 
         std::string resp = RecvLine();
-
-        // [FIX-PEPM-C1] Lire action_index ET pepm_risk depuis la réponse Python
-        // Python retourne maintenant : {"next_hop":X,"q_value":Y,"action_index":Z,
-        //                               "pepm_risk":R,"pepm_at_risk":true/false}
-        result.actionIdx  = ParseInt(resp, "action_index", 0);
-        double pr = ParseDouble(resp, "pepm_risk", -1.0);
-        result.pepmRisk   = (pr >= 0.0) ? pr : 0.0;
-        result.pepmAtRisk = (resp.find("\"pepm_at_risk\":true") != std::string::npos);
-
-        return result;
+        return ParseInt(resp, "action_index", 0);
     }
 
-    // Mise à jour batch PEPM — conservé pour addqn-routing.h (CheckAndTriggerPepmRecluster).
-    // [FIX-PEPM-C5] Parse maintenant aussi "at_risk":[id,...] retourné par Python.
-    // Retourne les IDs des nœuds à risque pour déclenchement immédiat de rotation CH.
-    std::vector<uint32_t> RequestPEPMBatch(std::vector<NodeState>& nodes) {
-        std::vector<uint32_t> atRiskIds;
-        if (!m_connected) return atRiskIds;
-
-        std::ostringstream os;
-        os << "{\"cmd\":\"pepm_batch\",\"nodes\":[";
-        bool first = true;
-        for (const auto& n : nodes) {
-            if (!n.isAlive) continue;
-            if (!first) os << ",";
-            os << "{\"node_id\":" << n.id
-               << ",\"energy\":" << std::fixed << std::setprecision(6) << n.energy << "}";
-            first = false;
-        }
-        os << "]}\n";
-
-        if (!SendLine(os.str())) return atRiskIds;
-
-        std::string resp = RecvLine();
-        if (resp.empty()) return atRiskIds;
-
-        // Parser {"risks":{"<id>":risk,...},"at_risk":[id,...]}
-        for (auto& n : nodes) {
-            if (!n.isAlive) continue;
-            const std::string key = "\"" + std::to_string(n.id) + "\":";
-            auto pos = resp.find(key);
-            if (pos != std::string::npos) {
-                pos += key.size();
-                while (pos < resp.size() && resp[pos] == ' ') pos++;
-                try {
-                    double risk = std::stod(resp.substr(pos));
-                    n.pepmRisk = std::max(0.0, std::min(1.0, risk));
-                } catch (...) {}
-            }
-        }
-
-        // [FIX-PEPM-C5] Parser le tableau "at_risk":[id1,id2,...]
-        const std::string atRiskKey = "\"at_risk\":[";
-        auto arPos = resp.find(atRiskKey);
-        if (arPos != std::string::npos) {
-            arPos += atRiskKey.size();
-            auto endPos = resp.find(']', arPos);
-            if (endPos != std::string::npos) {
-                std::string arrStr = resp.substr(arPos, endPos - arPos);
-                std::istringstream iss(arrStr);
-                std::string token;
-                while (std::getline(iss, token, ',')) {
-                    try {
-                        uint32_t id = static_cast<uint32_t>(std::stoul(token));
-                        atRiskIds.push_back(id);
-                    } catch (...) {}
-                }
-            }
-        }
-        return atRiskIds;
-    }
-
-    // NOUVEAU: Demande de prédiction PEPM au serveur Python (mode unitaire — conservé pour compat)
-    double RequestPEPM(uint32_t nodeId, double energy, const std::vector<double>& state) {
+    /**
+     * Demande le risque PEPM pour un seul nœud.
+     * @return risque ∈ [0.0, 1.0], ou -1.0 si échec
+     */
+    double RequestPEPM(uint32_t nodeId, double energy) {
         if (!m_connected) return -1.0;
 
         std::ostringstream os;
         os << "{\"cmd\":\"pepm\",\"node_id\":" << nodeId
            << ",\"energy\":" << std::fixed << std::setprecision(6) << energy
-           << ",\"state\":[";
-        for (size_t i = 0; i < state.size(); i++)
-            os << (i ? "," : "") << state[i];
-        os << "]}\n";
+           << "}\n";
 
         if (!SendLine(os.str())) return -1.0;
 
-        std::string resp = RecvLine();
-        return ParseDouble(resp, "risk", -1.0);
+        const std::string resp = RecvLine();
+        if (resp.empty()) return -1.0;
+
+        const double risk = ParseDouble(resp, "risk", -1.0);
+        if (risk < 0.0 || risk > 1.0) return -1.0;
+        return risk;
+    }
+
+    /**
+     * Interrogation PEPM groupée pour tous les nœuds vivants en une seule
+     * requête TCP (évite N round-trips séquentiels à chaque step RL).
+     *
+     * @param nodeEnergies  Paires (nodeId, energyJ) pour les nœuds vivants
+     * @param[out] risks    Rempli avec {nodeId → risk} pour chaque nœud traité
+     * @return              true si la requête a réussi
+     */
+    bool RequestPEPMBatch(const std::vector<std::pair<uint32_t,double>>& nodeEnergies,
+                           std::map<uint32_t,double>& risks) {
+        if (!m_connected || nodeEnergies.empty()) return false;
+
+        std::ostringstream os;
+        os << "{\"cmd\":\"pepm_batch\",\"nodes\":[";
+        for (size_t i = 0; i < nodeEnergies.size(); i++) {
+            os << (i ? "," : "")
+               << "{\"node_id\":" << nodeEnergies[i].first
+               << ",\"energy\":"  << std::fixed << std::setprecision(6)
+               << nodeEnergies[i].second << "}";
+        }
+        os << "]}\n";
+
+        if (!SendLine(os.str())) return false;
+
+        const std::string resp = RecvLine();
+        if (resp.empty()) return false;
+
+        // Parser {"risks": {"123": 0.42, ...}, "at_risk": [...]}
+        // Format simple : cherche "\"<id>\": <valeur>" dans le bloc "risks"
+        const std::string risksKey = "\"risks\":";
+        auto rpos = resp.find(risksKey);
+        if (rpos == std::string::npos) return false;
+
+        // Extraction manuelle des paires "id": valeur dans le bloc risks
+        size_t brace = resp.find('{', rpos + risksKey.size());
+        size_t end   = resp.find('}', brace);
+        if (brace == std::string::npos || end == std::string::npos) return false;
+
+        std::string block = resp.substr(brace + 1, end - brace - 1);
+
+        // Parcours des paires "id": val
+        size_t pos = 0;
+        while (pos < block.size()) {
+            // Chercher la prochaine clé
+            size_t q1 = block.find('"', pos);
+            if (q1 == std::string::npos) break;
+            size_t q2 = block.find('"', q1 + 1);
+            if (q2 == std::string::npos) break;
+            std::string idStr = block.substr(q1 + 1, q2 - q1 - 1);
+
+            // Chercher la valeur après ':'
+            size_t colon = block.find(':', q2);
+            if (colon == std::string::npos) break;
+            size_t vstart = colon + 1;
+            while (vstart < block.size() && (block[vstart] == ' ')) vstart++;
+
+            try {
+                uint32_t nid  = static_cast<uint32_t>(std::stoul(idStr));
+                double   risk = std::stod(block.substr(vstart));
+                if (risk >= 0.0 && risk <= 1.0)
+                    risks[nid] = risk;
+            } catch (...) {}
+
+            pos = block.find(',', vstart);
+            if (pos == std::string::npos) break;
+            pos++;
+        }
+        return !risks.empty();
     }
 
     void SubmitReward(const std::vector<double>& state, int action, double reward,
@@ -385,15 +382,30 @@ private:
 
     std::string RecvLine() {
         if (m_sock < 0) return "";
-        char buf[4096] = {};
-        int n = recv(m_sock, buf, sizeof(buf)-1, 0);
-        if (n <= 0) {
-            ::close(m_sock);
-            m_sock = -1;
-            m_connected = false;
-            return "";
+
+        // Buffer 16 384 B — suffisant pour la réponse pepm_batch de 300 nœuds
+        // (~6 400 chars) avec marge × 2.5.  Pour des simulations > 600 nœuds,
+        // augmenter à 32 768.
+        static constexpr int RECV_BUF = 16384;
+        std::string result;
+        result.reserve(RECV_BUF);
+
+        char buf[RECV_BUF];
+        // Lecture en boucle jusqu'au '\n' ou fermeture
+        while (true) {
+            int n = recv(m_sock, buf, sizeof(buf) - 1, 0);
+            if (n <= 0) {
+                ::close(m_sock);
+                m_sock = -1;
+                m_connected = false;
+                return "";
+            }
+            result.append(buf, n);
+            // Le serveur Python termine chaque réponse par '\n'
+            if (result.back() == '\n') break;
+            // Si la réponse est très longue, continuer à lire
         }
-        return std::string(buf, n);
+        return result;
     }
 
     int ParseInt(const std::string& s, const std::string& key, int def) {
@@ -571,6 +583,7 @@ struct SimContext {
     double    radioRange;
     double    sinkX, sinkY;
     double    areaSize;
+    uint32_t  seed = FdqnCfg::DEFAULT_SEED;  // BUG C FIX: seed from CLI, not hardcoded 42
 
     EnergySourceContainer*       pSrc;
     std::vector<NodeState>*      pSt;
@@ -647,12 +660,40 @@ static void InitRLStep() {
     rlStep = [&]() {
         const double now = Simulator::Now().GetSeconds();
 
-        // ── Mise à jour PEPM ─────────────────────────────────────────────────
-        // [FIX-PEPM-C2] Le risque PEPM est maintenant mis à jour DANS chaque
-        // RequestAction() côté Python et renvoyé dans la réponse.
-        // RequestPEPMBatch() est donc supprimé ici (doublon coûteux : N+1 aller-retours
-        // → 1 aller-retour par nœud, inclus dans le flux action normal).
-        // Les pepmRisk restent à leur dernière valeur pour les nœuds hors-ligne.
+        // ── Pré-passe PEPM batch ─────────────────────────────────────────────────
+        // Toutes les mises à jour PEPM sont groupées en UNE SEULE requête TCP
+        // vers Python pepm_lstm.py, au lieu de N requêtes séquentielles.
+        // Si Python est indisponible : tentative de reconnexion unique ici,
+        // et les pepmRisk des nœuds restent à leur dernière valeur Python reçue.
+        // ─────────────────────────────────────────────────────────────────────────
+        if (!g_rl.IsConnected())
+            g_rl.TryReconnect();
+
+        if (g_rl.IsConnected()) {
+            // Construire la liste (nodeId, energy) de tous les nœuds vivants
+            std::vector<std::pair<uint32_t,double>> pepmInput;
+            pepmInput.reserve(ctx.nNodes);
+            for (uint32_t i = 0; i < ctx.nNodes; i++) {
+                const NodeState& ns = (*ctx.pSt)[i];
+                if (ns.isAlive && !g_deadNodes.count(ns.id))
+                    pepmInput.push_back({ns.id, ns.energy});
+            }
+
+            // Requête batch → Python met à jour le LSTM pour tous les nœuds
+            std::map<uint32_t,double> pepmRisks;
+            if (g_rl.RequestPEPMBatch(pepmInput, pepmRisks)) {
+                // Appliquer les risques reçus à chaque NodeState
+                for (uint32_t i = 0; i < ctx.nNodes; i++) {
+                    NodeState& ns = (*ctx.pSt)[i];
+                    auto it = pepmRisks.find(ns.id);
+                    if (it != pepmRisks.end())
+                        ns.pepmRisk = it->second;
+                }
+            }
+            // Si RequestPEPMBatch échoue (socket rompu en cours de requête) :
+            // les pepmRisk gardent leur valeur précédente — pas de recalcul C++.
+        }
+        // ─────────────────────────────────────────────────────────────────────────
 
         for (uint32_t i = 0; i < ctx.nNodes; i++) {
             NodeState& ns = (*ctx.pSt)[i];
@@ -713,34 +754,17 @@ static void InitRLStep() {
             }
             if (neighbors.empty()) continue;
 
+            // pepmRisk déjà mis à jour par la pré-passe batch PEPM en début de step.
             const std::vector<double> state = BuildState(ns, *ctx.pSt);
 
             int actionIdx;
             uint32_t nextHop;
 
-            if (!g_rl.IsConnected() && (g_rl.GetSteps() % 100 == 0))
-                g_rl.TryReconnect();
-
             if (g_rl.IsConnected()) {
-                // [FIX-PEPM-C2] RequestAction retourne maintenant action + pepmRisk mis à jour
-                RLBridge::ActionResult ar = g_rl.RequestAction(state, neighbors, ns.id);
-                actionIdx = std::max(0, std::min(ar.actionIdx,
+                actionIdx = g_rl.RequestAction(state, neighbors, ns.id);
+                actionIdx = std::max(0, std::min(actionIdx,
                             (int)neighbors.size() - 1));
                 nextHop   = neighbors[actionIdx];
-
-                // [FIX-PEPM-C3] Injecter le risque PEPM retourné par Python dans NodeState
-                // AVANT le calcul de la récompense — c'est la valeur qui entre dans LAMBDA_SAFE
-                if (ar.pepmRisk >= 0.0) {
-                    ns.pepmRisk = ar.pepmRisk;
-                }
-
-                // [FIX-PEPM-C4] Déclenchement proactif re-clustering si CH à risque
-                // Sans attendre RECLUSTER_PERIOD — conformément à CheckAndTriggerPepmRecluster()
-                if (ar.pepmAtRisk && ns.isClusterHead) {
-                    // Marquer le CH pour rotation IFO immédiate au prochain re-clustering
-                    // Le flag pepmRisk > THRESHOLD suffit — IFO l'exclura en Phase4
-                    ns.fitness = 0.0;  // invalider la fitness pour forcer remplacement
-                }
             } else {
                 actionIdx = (*ctx.pQA)[ns.id].SelectAction(ns.id, neighbors);
                 if (actionIdx < 0) continue;
@@ -772,7 +796,22 @@ static void InitRLStep() {
                             auto itR = ctx.nodeApps.find(relay.id);
                             if (itR != ctx.nodeApps.end() && itR->second)
                                 itR->second->SetStopTime(Seconds(now));
-                            // FND/HND/LND détection centralisée dans le bloc ns.Consume uniquement
+                            if (!g_fndDone) {
+                                g_fndDone = true; g_fndTime = now;
+                                g_compMetrics.fndTime = now;
+                                NS_LOG_UNCOND("⭐ [FND] Premier nœud mort à t=" << now << "s");
+                            }
+                            if (!g_hndDone && g_deadNodes.size() >= g_nNodes / 2) {
+                                g_hndDone = true; g_hndTime = now;
+                                g_compMetrics.hndTime = now;
+                                NS_LOG_UNCOND("⭐ [HND] Moitié nœuds morts à t=" << now << "s");
+                            }
+                            if (!g_lndDone && g_deadNodes.size() >= (uint32_t)(g_nNodes * 0.9)) {
+                                g_lndDone = true; g_lndTime = now;
+                                g_compMetrics.lndTime = now;
+                                NS_LOG_UNCOND("⭐ [LND-90%] 90% nœuds morts à t=" << now << "s");
+                                Simulator::Stop();
+                            }
                         }
                     }
                 }
@@ -921,33 +960,26 @@ static void InitDoCheck() {
             if (g_deadNodes.count(ns.id)) ns.isAlive = false;
 
         // ===== MÉTRIQUES ORIGINALES =====
-        uint32_t alive = 0;
-        uint32_t atRisk = 0;          // nœuds VIVANTS avec risque > seuil d'ACTION (0.5)
-        uint32_t atRiskEarly = 0;     // nœuds VIVANTS avec risque > seuil d'ALERTE (0.35) — affichage
+        uint32_t alive = 0, atRisk = 0;
         double sumE = 0.0, sumE2 = 0.0;
         double minE = 1e18, maxE = 0.0;
         double drainedTotal = 0.0;
-        double sumPepmRisk = 0.0;
+        double sumPepmRisk = 0.0;   // Pour PEPMRiskMean
 
-        for (auto& ns : *ctx.pSt) {
-            // [FIX-PEPM-D1] Réinitialiser pepmRisk des nœuds morts à 0
-            // pour éviter qu'ils faussent les comptages et les moyennes
-            if (!ns.isAlive) {
-                ns.pepmRisk = 0.0;
-                drainedTotal += (ctx.initEnergy - ns.energy);
-                continue;
+        for (const auto& ns : *ctx.pSt) {
+            if (ns.isAlive) {
+                alive++;
+                sumE  += ns.energy;
+                sumE2 += ns.energy * ns.energy;
+                minE   = std::min(minE, ns.energy);
+                maxE   = std::max(maxE, ns.energy);
+                sumPepmRisk += ns.pepmRisk;
+                // BUG B FIX: atRisk uniquement pour nœuds VIVANTS
+                // Les nœuds morts gardent leur dernière pepmRisk Python reçue
+                // (souvent élevée) — les inclure fausserait la métrique.
+                if (ns.pepmRisk > FdqnCfg::PEPM_RISK_THRESHOLD) atRisk++;
             }
-            alive++;
-            sumE  += ns.energy;
-            sumE2 += ns.energy * ns.energy;
-            minE   = std::min(minE, ns.energy);
-            maxE   = std::max(maxE, ns.energy);
-            sumPepmRisk += ns.pepmRisk;
             drainedTotal += (ctx.initEnergy - ns.energy);
-
-            // [FIX-PEPM-D2] Compter uniquement les VIVANTS pour atRisk
-            if (ns.pepmRisk > FdqnCfg::PEPM_RISK_THRESHOLD)   atRisk++;
-            if (ns.pepmRisk > 0.35)                             atRiskEarly++;
         }
 
         const uint32_t dead = static_cast<uint32_t>(g_deadNodes.size());
@@ -979,7 +1011,7 @@ static void InitDoCheck() {
         g_compMetrics.totalEnergyDrained_J.push_back(drainedTotal);
         g_compMetrics.aliveNodesPerRound.push_back(alive);
         g_compMetrics.deadNodesPerRound.push_back(dead);
-        g_compMetrics.atRiskPEPMPerRound.push_back(atRiskEarly); // seuil 0.35 pour analyse
+        g_compMetrics.atRiskPEPMPerRound.push_back(atRisk);
         g_compMetrics.pdrRLPerRound.push_back(pdrRLNow);
         g_compMetrics.pdrNS3PerRound.push_back(pdrNS3Now);
         g_compMetrics.rlStepsPerRound.push_back(g_rl.GetSteps());
@@ -1026,7 +1058,7 @@ static void InitDoCheck() {
         entry.rlSteps = g_rl.GetSteps();
         entry.fedRound = g_rl.GetFedRound();
         entry.nClusters = ctx.pIfo->GetClusters().size();
-        entry.atRiskPEPM = atRiskEarly;
+        entry.atRiskPEPM = atRisk;
 
         // Collecte des récompenses moyennes
         double sumReward = 0.0;
@@ -1049,18 +1081,32 @@ static void InitDoCheck() {
 
         g_rlHistory.push_back(entry);
 
-        // FIX #8: Re-clustering proactif PEPM — déclenché uniquement si CH VIVANT à risque
-        // [FIX-PEPM-D4] atRisk ne compte que les vivants désormais → pas de déclenchements fantômes
+        // BUG D FIX: Lambda de mise à jour distToSink après tout recluster
+        // distToSink est utilisé par la fitness IFO, la récompense ADDQN et
+        // le drain énergétique LeachCHRound. Il doit refléter la position
+        // réelle du sink, surtout si areaSize ou sinkX/Y varient via CLI.
+        auto updateDistToSink = [&]() {
+            for (auto& ns : *ctx.pSt) {
+                if (ns.isAlive)
+                    ns.distToSink = NodeDist(ns.x, ns.y, ctx.sinkX, ctx.sinkY);
+            }
+        };
+
+        // FIX #8: Re-clustering proactif PEPM — déclenché à chaque round si CH à risque
         if (alive > 0 && atRisk > 0) {
             uint32_t rotations = ctx.pIfo->TriggerProactiveRecluster(*ctx.pSt);
-            if (rotations > 0 && g_rl.IsConnected())
-                g_rl.SendTopology(ctx.pIfo->GetClusters());
+            if (rotations > 0) {
+                updateDistToSink();
+                if (g_rl.IsConnected())
+                    g_rl.SendTopology(ctx.pIfo->GetClusters());
+            }
         }
 
         // Re-clustering IFO périodique
         if (round % 2 == 0 && alive > 0) {
             const uint32_t newNC = ctx.pIfo->ComputeNClusters(*ctx.pSt);
             ctx.pIfo->Run(*ctx.pSt, newNC);
+            updateDistToSink();  // BUG D FIX
 
             if (g_rl.IsConnected())
                 g_rl.SendTopology(ctx.pIfo->GetClusters());
@@ -1117,8 +1163,6 @@ static void InitDoCheck() {
         }
 
         // ===== AFFICHAGE CONSOLE =====
-        // [FIX-PEPM-D3] Afficher atRiskEarly (seuil 0.35) comme signal précoce visible
-        // et atRisk (seuil 0.5) pour le déclenchement IFO — deux colonnes distinctes
         NS_LOG_UNCOND(std::fixed
             << "[Round " << round << "] t="
             << std::setprecision(0) << now << "s"
@@ -1130,8 +1174,7 @@ static void InitDoCheck() {
             << "|PDR_NS3=" << pdrNS3Now << "%"
             << "|delay=" << std::setprecision(2)
             << (g_compMetrics.endToEndDelay_ms.empty() ? 0.0 : g_compMetrics.endToEndDelay_ms.back()) << "ms"
-            << "|PEPM@warn=" << atRiskEarly   // nœuds vivants avec risque > 0.35 (alerte précoce)
-            << "|PEPM@act=" << atRisk          // nœuds vivants avec risque > 0.50 (action IFO)
+            << "|PEPM@risk=" << atRisk
             << "|PEPM_moy=" << std::setprecision(3) << pepmRiskMean
             << "|RL=" << g_rl.GetSteps()
             << "|fed=" << g_rl.GetFedRound());
@@ -1159,7 +1202,7 @@ void ExportRLHistory() {
     json << "    \"simDuration_s\": " << ctx.simDuration << ",\n";
     json << "    \"areaSize_m\": " << ctx.areaSize << ",\n";
     json << "    \"radioRange_m\": " << ctx.radioRange << ",\n";
-    json << "    \"seed\": " << 42 << "\n";
+    json << "    \"seed\": " << ctx.seed << "\n";
     json << "  },\n";
     json << "  \"metrics\": {\n";
     json << "    \"fnd_time_s\": " << g_compMetrics.fndTime << ",\n";
@@ -1507,6 +1550,7 @@ int main(int argc, char* argv[]) {
     ctx.sinkX        = p.sinkX;
     ctx.sinkY        = p.sinkY;
     ctx.areaSize     = p.areaSize;
+    ctx.seed         = p.seed;          // BUG C FIX
     ctx.pSrc         = &eSources;
     ctx.pSt          = &nodeStates;
     ctx.pSens        = &sensors;
@@ -1551,14 +1595,14 @@ int main(int argc, char* argv[]) {
     }
     const double meanEFinal = alive > 0 ? sumE / alive : 0.0;
     g_compMetrics.totalEnergyConsumed_J = ctx.nNodes * ctx.initEnergy - sumE;
-    g_compMetrics.avgPDR_RL = g_compMetrics.pdrRLPerRound.empty() ? 0.0
-        : std::accumulate(g_compMetrics.pdrRLPerRound.begin(),
-                          g_compMetrics.pdrRLPerRound.end(), 0.0)
-          / g_compMetrics.pdrRLPerRound.size();
-    g_compMetrics.avgPDR_NS3 = g_compMetrics.pdrNS3PerRound.empty() ? 0.0
-        : std::accumulate(g_compMetrics.pdrNS3PerRound.begin(),
-                          g_compMetrics.pdrNS3PerRound.end(), 0.0)
-          / g_compMetrics.pdrNS3PerRound.size();
+    g_compMetrics.avgPDR_RL = g_compMetrics.pdrRLPerRound.empty() ? 0.0 :
+                               std::accumulate(g_compMetrics.pdrRLPerRound.begin(),
+                                        g_compMetrics.pdrRLPerRound.end(), 0.0)
+                                        / g_compMetrics.pdrRLPerRound.size();
+    g_compMetrics.avgPDR_NS3 = g_compMetrics.pdrNS3PerRound.empty() ? 0.0 :
+                                std::accumulate(g_compMetrics.pdrNS3PerRound.begin(),
+                                        g_compMetrics.pdrNS3PerRound.end(), 0.0)
+                                        / g_compMetrics.pdrNS3PerRound.size();
 
     double pdrRL = 100.0;
     if (ctx.rlPktEmitted > 0)

@@ -28,35 +28,59 @@ except ImportError:
 
 def fed_avg(models: List[Dict[str, Any]], n_samples: List[int]) -> Dict[str, Any]:
     """
-    Agrégation par moyenne pondérée (Federated Averaging)
+    Agrégation par moyenne pondérée (Federated Averaging).
+
+    Robuste aux cas dégénérés :
+      - modèles sans clé "weights" ou weights vide → ignorés
+      - n_layers incohérentes entre modèles → aligné sur le minimum
+      - n_samples vide ou tous nuls → poids uniformes
 
     Args:
-        models: Liste des modèles (chacun avec clé "weights")
-        n_samples: Nombre d'échantillons par modèle
+        models:    Liste de dicts {"weights": [[W, b], ...]}
+        n_samples: Nombre d'échantillons par modèle (même longueur que models)
 
     Returns:
-        Modèle agrégé
+        {"weights": [...]} agrégé, ou {} si aucun modèle valide
     """
     if not models:
         return {}
 
-    total = sum(n_samples) or 1
-    weights = [n / total for n in n_samples]
+    # Filtrer les modèles avec des weights exploitables
+    valid = [
+        (m, s) for m, s in zip(models, n_samples)
+        if m.get("weights") and len(m["weights"]) > 0
+    ]
+    if not valid:
+        return {}
 
-    # Récupérer toutes les couches
-    weight_lists = [m["weights"] for m in models]
-    n_layers = len(weight_lists[0])
+    valid_models, valid_samples = zip(*valid)
+
+    total = sum(valid_samples) or 1
+    agg_weights = [s / total for s in valid_samples]
+
+    # Nombre de couches : minimum commun pour éviter IndexError
+    n_layers = min(len(m["weights"]) for m in valid_models)
+    if n_layers == 0:
+        return {}
 
     avg_weights = []
-
     for layer_idx in range(n_layers):
-        # Convertir en arrays numpy
-        layer_arrays = [np.array(w[layer_idx]) for w in weight_lists]
-
-        # Moyenne pondérée
-        layer_avg = sum(w * arr for w, arr in zip(weights, layer_arrays))
-
-        avg_weights.append(layer_avg.tolist())
+        try:
+            layer_arrays = [
+                np.array(m["weights"][layer_idx], dtype=np.float64)
+                for m in valid_models
+            ]
+            # Vérifier que toutes les couches ont la même forme
+            shapes = [a.shape for a in layer_arrays]
+            if len(set(shapes)) > 1:
+                # Formes incompatibles → ignorer cette couche (ne pas planter)
+                avg_weights.append(layer_arrays[0].tolist())
+                continue
+            layer_avg = sum(w * arr for w, arr in zip(agg_weights, layer_arrays))
+            avg_weights.append(layer_avg.tolist())
+        except (IndexError, TypeError, ValueError):
+            # Couche corrompue → garder la première valeur disponible
+            avg_weights.append(valid_models[0]["weights"][layer_idx])
 
     return {"weights": avg_weights}
 

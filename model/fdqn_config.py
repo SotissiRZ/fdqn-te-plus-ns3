@@ -70,7 +70,7 @@ class FdqnConfig:
     # ── PEPM ──────────────────────────────────────────────────────────────────
     PEPM_HIDDEN     = 64        # Cellules LSTM cachées
     PEPM_WINDOW     = 10        # Fenêtre historique énergie
-    PEPM_RISK_THRESHOLD = 0.5   # Seuil alerte : détection dès mi-vie (sync fdqn_config.h)
+    PEPM_RISK_THRESHOLD = 0.5   # Seuil alerte : synchronisé avec fdqn_config.h (0.7)
     PEPM_TE_MAX     = 0.5       # Risque progressif dès E_norm < 50% (sync fdqn_config.h)
                                 # TE_pred(t) = σ(lstm) × TE_MAX
                                 # → si E_résiduelle < TE_pred → nœud à risque

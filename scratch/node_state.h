@@ -46,7 +46,7 @@ inline double NodeDist(double x1, double y1, double x2, double y2) {
  *   • energy      — bilan LEACH logique (utilisé pour FND/HND et les métriques)
  *   • NS-3        — BasicEnergySource (géré par NS-3 pour EnergyCallback)
  *
- * Les méthodes Consume() / NormEnergy() / UpdatePEPM() opèrent sur
+ * Les méthodes Consume() / NormEnergy() opèrent sur
  * le bilan logique uniquement.
  */
 struct NodeState {
@@ -122,22 +122,11 @@ struct NodeState {
         return (eInit > 0.0) ? std::max(0.0, energy / eInit) : 0.0;
     }
 
-    /**
-     * [CORRECTION Problème 2] UpdatePEPM() SUPPRIMÉE côté C++.
-     *
-     * Le risque PEPM est exclusivement calculé par pepm_lstm.py via le handler
-     * pepm_batch de rl_server.py, puis injecté dans pepmRisk par RequestPEPMBatch().
-     *
-     * Si Python est indisponible, la dernière valeur de pepmRisk est conservée
-     * sans aucun recalcul local — ce qui évite la divergence entre le modèle C++
-     * simplifié et le modèle Python (LSTM + EWMA + seuil absolu).
-     *
-     * Cette méthode est conservée comme stub vide pour ne pas casser les
-     * éventuelles références restantes dans le code avant qu'elles soient nettoyées.
-     */
-    void UpdatePEPM() {
-        // NO-OP intentionnel — voir commentaire ci-dessus
-    }
+    // NOTE : le calcul du risque PEPM est exclusivement délégué au module
+    // Python pepm_lstm.py via RLBridge::RequestPEPM().
+    // Le champ pepmRisk est mis à jour par fdqn_te_plus.cc après chaque
+    // réponse du serveur. En l'absence de réponse (serveur non connecté),
+    // la dernière valeur reçue est conservée — aucune réimplémentation C++.
 };
 
 // =============================================================================

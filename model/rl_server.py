@@ -151,8 +151,7 @@ class FDQNServer:
         neighbors = payload.get("neighbors", [])
 
         if not neighbors:
-            return {"next_hop": node_id, "q_value": 0.0, "action_index": 0,
-                    "pepm_risk": 0.0, "pepm_at_risk": False}
+            return {"next_hop": node_id, "q_value": 0.0, "action_index": 0}
 
         # Clamp neighbors à MAX_NEIGHBORS — le réseau Q a max_actions sorties
         # Les voisins au-delà sont éligibles via exploration aléatoire normale
@@ -165,21 +164,6 @@ class FDQNServer:
         # Convertir l'état en numpy array (attendu par l'agent)
         import numpy as np
         state_array = np.array(state, dtype=np.float32)
-
-        # [FIX-PEPM-3] Mise à jour PEPM depuis l'énergie normalisée (state[0])
-        # state[0] = E_i(t)/E_max — on reconvertit en Joules pour pepm_pool
-        e_norm = float(state_array[0]) if len(state_array) > 0 else 1.0
-        e_joules = e_norm * self.e_init
-        self.pepm_pool.update_node(node_id, e_joules)
-        pepm_risk = float(self.pepm_pool.get_risk(node_id))
-        pepm_at_risk = pepm_risk > FdqnConfig.PEPM_RISK_THRESHOLD
-        self.stats["pepm_queries"] += 1
-
-        # [FIX-PEPM-4] Injecter le risque PEPM dans state[2] avant la sélection d'action
-        # state[2] = predictedRisk dans BuildState() C++ — mis à jour côté Python
-        # pour que le réseau ADDQN voit la valeur courante (pas celle de l'appel précédent)
-        if len(state_array) > 2:
-            state_array[2] = np.float32(pepm_risk)
 
         # Sélectionner l'action (sur neighbors_capped, jamais > max_n)
         action_idx, q_value, is_exploration = agent.select_action(state_array, neighbors_capped)
@@ -197,9 +181,7 @@ class FDQNServer:
         return {
             "next_hop": int(neighbors_capped[action_idx]),
             "q_value": float(q_value),
-            "action_index": int(action_idx),
-            "pepm_risk": pepm_risk,        # [FIX-PEPM-3] retourné à C++ → predictedRisk
-            "pepm_at_risk": pepm_at_risk   # [FIX-PEPM-3] flag pour CheckAndTriggerPepmRecluster
+            "action_index": int(action_idx)
         }
 
     def _handle_reward(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -247,50 +229,59 @@ class FDQNServer:
 
         return return_val
 
-    def _handle_pepm(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Demande de prédiction PEPM (mode unitaire)"""
-        node_id = int(payload.get("node_id", 0))
-        energy = float(payload.get("energy", self.e_init))
+    def _handle_pepm_batch(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        nodes_payload = payload.get("nodes", [])
+        risks: Dict[int, float] = {}
+        at_risk: list = []
 
+        for entry in nodes_payload:
+            nid    = int(entry.get("node_id", 0))
+            energy = float(entry.get("energy", self.e_init))
+            energy = max(0.0, min(energy, self.e_init))
+
+            # update_node retourne le seuil, mais on veut le risque
+            self.pepm_pool.update_node(nid, energy)
+            risk = self.pepm_pool.get_risk(nid)  # ← déjà fait
+            risks[nid] = float(max(0.0, min(1.0, risk)))  # ← clamp
+            if risk > FdqnConfig.PEPM_RISK_THRESHOLD:
+                at_risk.append(nid)
+
+        self.stats["pepm_queries"] += len(nodes_payload)
+
+        return {
+            "risks":    {str(k): v for k, v in risks.items()},
+            "at_risk":  at_risk,
+            "n_updated": len(nodes_payload)
+        }
+
+    def _handle_pepm(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Demande de prédiction PEPM pour un nœud.
+        Reçoit uniquement node_id + energy (en Joules).
+        Le module pepm_lstm.py gère tout l'historique et le modèle LSTM.
+        """
+        node_id = int(payload.get("node_id", 0))
+        energy  = float(payload.get("energy", self.e_init))
+
+        # Borne défensive : l'énergie ne peut pas dépasser E_INIT ni être négative
+        energy = max(0.0, min(energy, self.e_init))
+
+        # Déléguer au module PEPMModule via PEPMPool
+        # update_node() appelle PEPMModule.update() → LSTM + EWMA + abs_risk
         threshold = self.pepm_pool.update_node(node_id, energy)
-        risk = self.pepm_pool.get_risk(node_id)
+        risk      = self.pepm_pool.get_risk(node_id)
+
+        # Validation de sortie
+        risk = float(max(0.0, min(1.0, risk)))
         is_at_risk = risk > FdqnConfig.PEPM_RISK_THRESHOLD
 
         self.stats["pepm_queries"] += 1
 
         return {
-            "risk": float(risk),
-            "threshold": float(threshold),
+            "risk":       risk,
+            "threshold":  float(threshold),
             "is_at_risk": bool(is_at_risk)
         }
-
-    def _handle_pepm_batch(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        [FIX Problem 2] Mise à jour batch de tous les risques PEPM en un seul
-        aller-retour TCP.
-
-        Payload : {"cmd":"pepm_batch","nodes":[{"node_id":N,"energy":E}, ...]}
-        Réponse : {"risks":{"<id>":risk, ...}, "at_risk":[id, ...]}
-
-        C++ appelle RequestPEPMBatch() une seule fois avant la boucle de nœuds,
-        ce qui évite N appels TCP individuels par step RL.
-        """
-        nodes = payload.get("nodes", [])
-        risks = {}
-        at_risk_ids = []
-
-        for entry in nodes:
-            node_id = int(entry.get("node_id", 0))
-            energy  = float(entry.get("energy", self.e_init))
-            self.pepm_pool.update_node(node_id, energy)
-            risk = float(self.pepm_pool.get_risk(node_id))
-            risks[str(node_id)] = risk
-            if risk > FdqnConfig.PEPM_RISK_THRESHOLD:
-                at_risk_ids.append(node_id)
-
-        self.stats["pepm_queries"] += len(nodes)
-
-        return {"risks": risks, "at_risk": at_risk_ids}
 
     def _handle_cluster(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Mise à jour de la topologie des clusters (depuis IFO via NS-3)"""
@@ -521,7 +512,7 @@ class ClientHandler(threading.Thread):
 # Fonction principale
 # ============================================================
 
-def run_server(host: str = "0.0.0.0", port: int = 5555):
+def run_server(host: str = "0.0.0.0", port: int = FdqnConfig.RL_PORT):
     """Lance le serveur"""
 
     # S'assurer que le port est bien un entier

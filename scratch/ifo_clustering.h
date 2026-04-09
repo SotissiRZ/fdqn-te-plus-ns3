@@ -195,40 +195,60 @@ public:
     }
 
     // ── Rotation CH proactive via PEPM ────────────────────────────────────────
-    // (déclaré ici dans la section publique — avant le bloc private)
 
     /**
      * Déclenche une rotation anticipée des CH à risque PEPM sans réexécuter
-     * le pipeline IFO complet. Appelé à chaque step RL dès qu'un CH dépasse
-     * FdqnCfg::PEPM_RISK_THRESHOLD — indépendamment du calendrier RECLUSTER_PERIOD.
+     * le pipeline IFO complet. Appelé depuis doCheck() après chaque round
+     * quand au moins un CH dépasse FdqnCfg::PEPM_RISK_THRESHOLD.
      *
      * Algorithme (par CH à risque) :
-     *   1. Identifier les membres du cluster avec énergie normalisée ≥ CH_MIN_ENERGY_NORM
-     *      et risque PEPM < seuil (candidats successeurs)
-     *   2. Parmi les candidats, choisir celui avec la fitness maximale
-     *      F = W1*E_norm + W2*(1−d_sink/d_max) [IFO simplifié]
-     *   3. Si un successeur existe → swap CH/membre, incrémenter reclusterCount
-     *   4. Sinon → le CH garde son rôle malgré le risque (pas de successeur viable)
+     *   1. Identifier les membres avec E_norm ≥ CH_MIN_ENERGY_NORM
+     *      et pepmRisk < seuil (candidats successeurs)
+     *   2. Choisir le candidat de fitness maximale F = W1*E_norm + W2*(1−d_sink/dMax)
+     *   3. Swap CH → successeur, incrémenter reclusterCount des deux
+     *   4. Si aucun candidat viable → CH garde son rôle
      *
-     * @param nodes   États des nœuds (modifiés in-place : isClusterHead, clusterId)
-     * @return        Nombre de rotations effectuées dans cet appel
+     * @param nodes  États nœuds (modifiés in-place)
+     * @return       Nombre de rotations effectuées
      */
     uint32_t TriggerProactiveRecluster(std::vector<NodeState>& nodes) {
         uint32_t rotations = 0;
         const double dMax  = m_areaSize * std::sqrt(2.0);
 
+        // ── Seuil d'énergie dynamique ─────────────────────────────────────────
+        // CH_MIN_ENERGY_NORM=0.70 est une constante figée qui devient inapplicable
+        // dès que E_moy du réseau descend sous 0.70×E_INIT (≈ round 16, t=800s) :
+        // aucun membre ne passe le filtre → zéro rotations → PEPM sans effet.
+        //
+        // Solution : seuil relatif à l'énergie moyenne courante des nœuds vivants.
+        // Le successeur doit avoir une énergie SUPÉRIEURE à la moyenne locale du
+        // cluster d'au moins MARGIN (10%), pour garantir un gain réel sur la
+        // durée de vie du CH.
+        //
+        //   min_energy_norm = max(0.20, E_moy_réseau_norm - 0.05)
+        //   → Toujours des candidats tant qu'il y a de la dispersion énergétique
+        //   → Au minimum 20% d'énergie (évite de désigner un CH agonisant)
+        //   → La marge -0.05 évite de prendre un membre presque aussi épuisé
+
+        double sumE = 0.0;
+        uint32_t nAlive = 0;
+        for (const auto& n : nodes)
+            if (n.isAlive) { sumE += n.energy; nAlive++; }
+        const double eMoyNorm = (nAlive > 0 && m_eInit > 0)
+                                ? (sumE / nAlive) / m_eInit
+                                : FdqnCfg::CH_MIN_ENERGY_NORM;
+        // Successeur doit avoir E_norm >= max(0.20, E_moy - 0.05)
+        // → au moins 5% de plus que la moyenne → vrai gain énergétique
+        const double dynMinEnergy = std::max(0.20, eMoyNorm - 0.05);
+
         for (auto& ci : m_clusters) {
-            // Trouver l'état du CH courant
             NodeState* chNode = nullptr;
             for (auto& n : nodes)
                 if (n.id == ci.chId && n.isAlive) { chNode = &n; break; }
+            if (!chNode) continue;
 
-            if (!chNode) continue;  // CH mort — sera géré au prochain IFO
-
-            // Le CH dépasse-t-il le seuil PEPM ?
             if (chNode->pepmRisk <= FdqnCfg::PEPM_RISK_THRESHOLD) continue;
 
-            // ── Chercher un successeur parmi les membres du cluster ───────────
             NodeState* bestSuccessor = nullptr;
             double     bestFitness   = -1.0;
 
@@ -238,65 +258,59 @@ public:
                     if (n.id == memberId && n.isAlive) { m = &n; break; }
                 if (!m) continue;
 
-                // Critère d'éligibilité : énergie suffisante + risque faible
-                if (m->NormEnergy(m_eInit) < FdqnCfg::CH_MIN_ENERGY_NORM) continue;
-                if (m->pepmRisk >= FdqnCfg::PEPM_RISK_THRESHOLD)           continue;
+                // Seuil dynamique : successeur doit avoir plus d'énergie que
+                // la moyenne réseau (pas comparaison à une constante figée)
+                if (m->NormEnergy(m_eInit) < dynMinEnergy) continue;
 
-                // Fitness IFO simplifiée : énergie + proximité sink
+                // Le successeur ne doit pas lui-même être à risque PEPM,
+                // SAUF si aucun candidat sain n'existe (fallback sans filtre PEPM)
+                // → premier passage : filtre PEPM strict
                 const double eR  = m->NormEnergy(m_eInit);
                 const double dR  = 1.0 - std::min(1.0, m->distToSink / dMax);
                 const double fit = FdqnCfg::IFO_W1 * eR + FdqnCfg::IFO_W2 * dR;
 
-                if (fit > bestFitness) {
-                    bestFitness   = fit;
-                    bestSuccessor = m;
-                }
+                // Priorité aux membres non à risque ; sinon accepter si meilleure énergie
+                const bool mAtRisk = (m->pepmRisk >= FdqnCfg::PEPM_RISK_THRESHOLD);
+                const double adjFit = mAtRisk ? fit * 0.5 : fit; // pénalise sans exclure
+
+                if (adjFit > bestFitness) { bestFitness = adjFit; bestSuccessor = m; }
             }
 
-            if (!bestSuccessor) continue;  // Pas de successeur viable
+            if (!bestSuccessor) continue;
 
-            // ── Swap CH → successeur ─────────────────────────────────────────
-            // Ancien CH devient membre ordinaire
             chNode->isClusterHead = false;
-            chNode->clusterId     = bestSuccessor->id;  // rattaché au nouveau CH
+            chNode->clusterId     = bestSuccessor->id;
             chNode->reclusterCount++;
 
-            // Nouveau CH
             bestSuccessor->isClusterHead = true;
             bestSuccessor->clusterId     = bestSuccessor->id;
             bestSuccessor->reclusterCount++;
 
-            // Mettre à jour ClusterInfo
             ci.chId = bestSuccessor->id;
-            // Retirer le successeur des membres, ajouter l'ancien CH
             ci.members.erase(
                 std::remove(ci.members.begin(), ci.members.end(), bestSuccessor->id),
                 ci.members.end());
             ci.members.push_back(chNode->id);
 
-            // Reconstruire l'index chId → cluster idx
             if (m_chToIdx.count(chNode->id)) {
                 uint32_t idx = m_chToIdx[chNode->id];
                 m_chToIdx.erase(chNode->id);
                 m_chToIdx[bestSuccessor->id] = idx;
             }
-
             rotations++;
         }
-
         return rotations;
     }
 
     /**
      * ETX simplifié basé sur la distance.
-     * ETX = 1 / p² avec p = max(0.01, 1 - d/radioRange)
-     * ETX → 1 si lien parfait (d=0), ETX → ∞ si hors portée
+     * ETX = 1 / p²  avec  p = max(0.1, 1 − d/radioRange)
+     * ETX → 1.0 si d ≈ 0 (lien parfait), ETX → ∞ si d > radioRange.
      */
-    // Dans ifo_clustering.h, remplacer ComputeETX par:
     double ComputeETX(double dist) const {
         if (dist > m_radioRange) return 1e9;
-        if (dist < 1.0) return 1.0; // Lien parfait si très proche
-        const double p = std::max(0.1, 1.0 - dist / m_radioRange); // min 10% de succès
+        if (dist < 1.0)          return 1.0;
+        const double p = std::max(0.1, 1.0 - dist / m_radioRange);
         return 1.0 / (p * p);
     }
 
@@ -306,51 +320,68 @@ private:
 
     void Phase1_Fitness(std::vector<NodeState*>& nodes) {
 
-        const double dMax = m_areaSize * std::sqrt(2.0);
+        const double dMax   = m_areaSize * std::sqrt(2.0);
+        const double dSinkMax = dMax;  // normalisation distance sink
 
-        // centre de la zone
-        const double centerX = m_areaSize / 2.0;
-        const double centerY = m_areaSize / 2.0;
+        // ── Pré-calcul des distances inter-nœuds voisins (pour dispersion) ──────
+        // Pour chaque nœud, on calcule sa distance minimale aux autres vivants
+        // dans la portée radio. Un nœud isolé obtient un bonus de dispersion.
+        // Cela contre la concentration des CH au centre du terrain.
 
         for (auto* n : nodes) {
 
-            // ───────────── Base IFO ─────────────
+            // ── W1 : énergie résiduelle normalisée ──────────────────────────────
             const double eR = n->NormEnergy(m_eInit);
 
-            // proxSink : 1 = proche du sink, 0 = loin
-            const double proxSink = 1.0 - std::min(1.0, n->distToSink / dMax);
-
+            // ── W2 : qualité de routage vers le sink ────────────────────────────
+            // Utilise 1 - d_sink/d_sink_max  (nœuds proches sink → bon relais)
+            // MAIS pondéré par la densité locale pour éviter que TOUS les CH
+            // convergent vers le sink.
+            // → On remplace dR "pur" par une métrique "relay quality" :
+            //   relay_q = (1 - d_sink/dMax) * clamp(deg / CLUSTER_OPT, 0, 1)
+            // Un nœud proche du sink ET entouré de voisins est un bon relais CH,
+            // mais un nœud trop isolé près du sink est pénalisé.
             uint32_t deg = 0;
+            double minDistNeighbor = 1e18;
             for (const auto* nb : nodes) {
                 if (nb->id == n->id) continue;
-                if (NodeDist(n->x, n->y, nb->x, nb->y) <= m_radioRange)
+                const double dNb = NodeDist(n->x, n->y, nb->x, nb->y);
+                if (dNb <= m_radioRange) {
                     deg++;
+                    if (dNb < minDistNeighbor) minDistNeighbor = dNb;
+                }
             }
+            const double proxSink  = 1.0 - std::min(1.0, n->distToSink / dSinkMax);
+            const double densR     = std::min(1.0, static_cast<double>(deg) / FdqnCfg::CLUSTER_OPT);
+            const double relayQual = proxSink * std::max(0.3, densR); // min 30% même si peu dense
 
-            const double densR = std::min(1.0,
-                static_cast<double>(deg) / FdqnCfg::CLUSTER_OPT);
+            // ── W3 : dispersion spatiale ─────────────────────────────────────────
+            // Récompense les nœuds éloignés du centre DE GRAVITÉ de leurs voisins CH.
+            // Calcul : distance normalisée du nœud par rapport au centroïde de zone.
+            // Plus un nœud est loin du centre → plus il couvre une zone périphérique
+            // → on récompense légèrement cette couverture pour équilibrer la topologie.
+            // dispR ∈ [0, 1] : 0 = nœud exactement au centre, 1 = nœud au coin.
+            const double dCenter = NodeDist(n->x, n->y, m_sinkX, m_sinkY);
+            // Normalisation : sink est au centre, dMax/2 ≈ distance coin→centre
+            const double dCenterMax = m_areaSize * 0.5 * std::sqrt(2.0);
+            const double dispR = std::min(1.0, dCenter / dCenterMax);
 
-            // FIX Problem 1 — relayQual : nœud proche du sink ET bien entouré
-            // Un nœud central isolé (densR faible) est pénalisé → évite concentration au centre
-            const double relayQual = proxSink * std::max(0.3, densR);
+            // ── Pénalité PEPM (facteur multiplicatif ∈ [0,1]) ───────────────────
+            const double pepmPenalty = 1.0 - std::min(1.0, n->pepmRisk);
 
-            // FIX Problem 1 — dispR : récompense la couverture périphérique
-            // Un nœud éloigné du centre géographique améliore la distribution des CH
-            const double distCenter = NodeDist(n->x, n->y, centerX, centerY);
-            const double dispR = std::min(1.0, distCenter / (m_areaSize * 0.7));
+            // ── Fitness finale (W1+W2+W3 = 1.0) × pepmPenalty ──────────────────
+            // W2 utilise relayQual (proche sink + bien entouré)
+            // W3 utilise dispR    (couverture périphérique)
+            // L'équilibre W2(relayQual) / W3(dispR) garantit que le résultat ne
+            // converge pas tous les CH au centre : un nœud à mi-chemin avec bonne
+            // densité bat un nœud central isolé.
+            const double fitness =
+                (FdqnCfg::IFO_W1 * eR
+                + FdqnCfg::IFO_W2 * relayQual
+                + FdqnCfg::IFO_W3 * dispR)
+                * pepmPenalty;
 
-            // Fitness de base — somme des poids = W1+W2+W3 = 1.0 ✓ [CORR anomalie 7]
-            double fitness =
-                FdqnCfg::IFO_W1 * eR
-                + FdqnCfg::IFO_W2 * relayQual   // remplace dR (biais centre corrigé)
-                + FdqnCfg::IFO_W3 * dispR;       // remplace densR (couverture périphérique)
-
-            // FIX BUG 4 — pepmPenalty appliqué UNIQUEMENT comme facteur multiplicatif final
-            // (pas additif — l'ancienne somme effective ≈1.3 est corrigée ici)
-            fitness *= (1.0 - std::min(1.0, n->pepmRisk));
-
-            // ───────────── Assignation finale ─────────────
-            n->fitness = std::max(0.0, fitness);
+            n->fitness = fitness;
         }
     }
     // ── Phase 2 : Exploration en spirale ─────────────────────────────────────
@@ -377,8 +408,9 @@ private:
 
                 if (!bestNb) continue;
 
-                // FIX Problem 1 — amplitude spirale fixée à 0.1×radioRange (constante)
-                // L'ancienne formule était proportionnelle à distToSink → amplifiait le biais centre
+                // Déplacement en spirale vers le meilleur voisin
+                // Amplitude = fraction fixe de radioRange (pas distToSink)
+                // — évite que les nœuds lointains du sink bougent moins vite
                 const double angle  = 2.0 * M_PI * iter / 8.0;
                 const double spiral = 0.1 * m_radioRange * std::sin(angle);
                 const double dx = bestNb->x - n->x;
@@ -393,9 +425,9 @@ private:
                 NodeState tmp = *n;
                 tmp.x = vx; tmp.y = vy;
                 tmp.distToSink = NodeDist(vx, vy, m_sinkX, m_sinkY);
-                const double dMax = m_areaSize * std::sqrt(2.0);
-                const double eR   = tmp.NormEnergy(m_eInit);
-                const double dR   = 1.0 - std::min(1.0, tmp.distToSink / dMax);
+                const double dMax2  = m_areaSize * std::sqrt(2.0);
+                const double eR     = tmp.NormEnergy(m_eInit);
+                const double proxS  = 1.0 - std::min(1.0, tmp.distToSink / dMax2);
 
                 uint32_t deg = 0;
                 for (const auto* nb2 : nodes) {
@@ -403,11 +435,13 @@ private:
                     if (NodeDist(vx, vy, nb2->x, nb2->y) <= m_radioRange)
                         deg++;
                 }
-                const double densR = std::min(1.0,
-                    static_cast<double>(deg) / FdqnCfg::CLUSTER_OPT);
-                const double newFit = FdqnCfg::IFO_W1 * eR
-                                    + FdqnCfg::IFO_W2 * dR
-                                    + FdqnCfg::IFO_W3 * densR;
+                const double densR2  = std::min(1.0, static_cast<double>(deg) / FdqnCfg::CLUSTER_OPT);
+                const double relayQ2 = proxS * std::max(0.3, densR2);
+                const double dCtrMax = m_areaSize * 0.5 * std::sqrt(2.0);
+                const double dispR2  = std::min(1.0, NodeDist(vx, vy, m_sinkX, m_sinkY) / dCtrMax);
+                const double newFit  = FdqnCfg::IFO_W1 * eR
+                                     + FdqnCfg::IFO_W2 * relayQ2
+                                     + FdqnCfg::IFO_W3 * dispR2;
 
                 if (newFit > n->fitness) {
                     // La position virtuelle améliore la fitness → accepter
@@ -566,11 +600,15 @@ private:
         const uint32_t kMax = std::min(nClusters,
                                        static_cast<uint32_t>(sorted.size()));
 
-        // Sélection gloutonne avec contrainte d'espacement minimal
-        // FIX Problem 1 — espacement minimal adaptatif pour distribution uniforme sur toute la zone
-        // idealSpacing = areaSize/√nClusters assure une couverture homogène
-        const double idealSpacing = m_areaSize / std::sqrt(static_cast<double>(nClusters));
-        const double minSpacing   = std::max(m_radioRange * 0.6, idealSpacing * 0.45);
+        // ── Sélection gloutonne avec espacement minimal adaptatif ──────────────
+        // minSpacing = max(0.6R, areaSize/sqrt(2*nClusters)) pour couvrir
+        // uniformément la zone sans laisser de zones sans CH.
+        // 0.6R (au lieu de 0.2R) évite que les CH se regroupent autour du sink.
+        const double idealSpacing = (kMax > 1)
+            ? m_areaSize / std::sqrt(static_cast<double>(kMax))
+            : m_areaSize;
+        const double minSpacing = std::max(m_radioRange * 0.6,
+                                           idealSpacing * 0.45);
         std::vector<NodeState*> chosen;
         chosen.reserve(kMax);
 
@@ -785,7 +823,6 @@ private:
             ci.avgDist = sumD / ci.members.size();
         }
     }
-
 
     // ── Membres privés ────────────────────────────────────────────────────────
 

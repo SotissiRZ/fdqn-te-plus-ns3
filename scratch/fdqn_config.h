@@ -54,7 +54,11 @@ constexpr double   E_AMP          = 10e-12;  // 10 pJ/bit/m² — amplificateur
 // Membre: 40000 * (50e-9 + 10e-12 * 75²) ≈ 40000 * 106.25e-9 ≈ 4.25 mJ/step
 // FND ≈ 2J / 4.25mJ ≈ 470 steps × 5s ≈ 2350s
 constexpr uint32_t DRAIN_BITS     = 8000;   // Calibré: FND_CH ~round 14 (t≈696s)
-constexpr double   CH_MIN_ENERGY_NORM = 0.7;  // E_min=0.70J → CH survie ≥5 rounds
+constexpr double   CH_MIN_ENERGY_NORM = 0.30;  // Fallback statique (utilisé hors TriggerProactiveRecluster)
+                                               // TriggerProactiveRecluster() utilise un seuil DYNAMIQUE :
+                                               // dynMinEnergy = max(0.20, E_moy_norm - 0.05)
+                                               // → garantit des candidats quelle que soit la phase de la sim
+                                               // Ancienne valeur 0.70 bloquait toutes les rotations dès t≈800s
 constexpr double   E_DA           = 5e-9;    //  5 nJ/bit — data aggregation (CH)
 constexpr uint32_t PKT_BITS       = 4000;    // Taille paquet = 500 octets
 // Énergie d'un cycle complet LEACH (transmission membre → CH → sink) :
