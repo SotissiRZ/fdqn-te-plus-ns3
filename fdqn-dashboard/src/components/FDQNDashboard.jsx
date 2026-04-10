@@ -781,7 +781,7 @@ export default function FDQNDashboard() {
                   ["PDR min observé", rows.length ? `${Math.min(...rows.map(r=>r.pdrRL||100)).toFixed(2)}%` : "—",                                     C.red],
                   ["Paquets émis",    summary?.RL_PktEmitted?.toLocaleString() || "—",                                                                  C.txt],
                   ["Paquets livrés",  summary?.RL_PktDelivered?.toLocaleString() || "—",                                                               C.green],
-                  ["Non livrés",      summary?.RL_PktEmitted && summary?.RL_PktDelivered ? (summary.RL_PktEmitted - summary.RL_PktDelivered).toLocaleString() : "—", C.red],
+                  ["Non livrés (E2E)", summary?.RL_PktEmitted && summary?.RL_PktDelivered ? (summary.RL_PktEmitted - summary.RL_PktDelivered).toLocaleString() : "—", C.red],
                   ["Délai E2E moy",   `${summary?.AvgDelay_ms?.toFixed(2) || last.delay?.toFixed(2) || "—"} ms`,                                      C.blue],
                 ].map(([k,v,c]) => (
                   <div key={k} style={{ background: C.muted, borderRadius: 5, padding: "7px 9px" }}>
@@ -791,7 +791,7 @@ export default function FDQNDashboard() {
                 ))}
               </div>
               <div style={{ fontSize: 8, color: C.dim, marginBottom: 4 }}>
-                <span style={{ color: pdrColor }}>★ PDR pré-FND</span> = métrique principale (avant la mort du 1er nœud)
+                <span style={{ color: pdrColor }}>★ PDR pré-FND</span> = PDR <strong style={{color:C.txt}}>end-to-end Sink</strong> avant la mort du 1er nœud (métrique principale)
               </div>
               <div style={{ background: C.muted, borderRadius: 4, height: 8, overflow: "hidden", marginBottom: 2 }}>
                 <div style={{ width: `${Math.min(100, pdrPreFND)}%`, height: "100%", borderRadius: 4, background: `linear-gradient(90deg,${C.red},${C.amber},${C.green})`, boxShadow: `0 0 8px ${pdrColor}`, transition: "width .5s" }} />
@@ -987,8 +987,13 @@ export default function FDQNDashboard() {
           const topo_ch    = topoAlive.filter(n=>n.isCH);
           const atRiskT    = topoAlive.filter(n=>n.pepmRisk>0.7);
           const topoDead   = topo.filter(n=>!n.isAlive);
-          const meanEN     = topoAlive.length?(topoAlive.reduce((a,n)=>a+(n.energyNorm??0),0)/topoAlive.length).toFixed(3):"—";
-          const stdE       = last.energyStd??0;
+          const meanEN     = topoAlive.length
+            ? (topoAlive.reduce((a,n)=>a+(n.energy??0),0)/topoAlive.length).toFixed(4)
+            : "—";
+          const initE      = summary?.InitEnergy_J ?? 1.2;
+          const stdE       = topoAlive.length > 1
+            ? Math.sqrt(topoAlive.reduce((a,n)=>a+Math.pow((n.energy??0)-parseFloat(meanEN),2),0)/topoAlive.length).toFixed(4)
+            : (last.energyStd ?? 0);
           const pdrDispPre  = pdrPreFND ? `${pdrPreFND.toFixed(1)}%` : "—";
           const pdrDispFin  = pdrFinal  ? `${pdrFinal.toFixed(1)}%`  : "—";
           const epsilon    = rl?.history?.length?(Math.max(0.05,Math.pow(0.995,rl.history.at(-1)?.rlSteps||0))).toFixed(3):"—";
@@ -1001,9 +1006,9 @@ export default function FDQNDashboard() {
             {label:"CH actifs",     val:`${topo_ch.length}`,
              sub:"cluster heads",                 col:C.cyan,
              pct:topo_ch.length/Math.max(topoAlive.length,1)*100*4},
-            {label:"E moy vivants", val:meanEN+"J",
-             sub:"énergie résiduelle",            col:"#ff8c00",
-             pct:parseFloat(meanEN)/2*100},
+            {label:"E moy vivants", val:meanEN !== "—" ? `${meanEN}J` : "—",
+             sub:`± ${stdE}J  (init ${initE}J)`,   col:"#ff8c00",
+             pct:meanEN !== "—" ? parseFloat(meanEN)/initE*100 : 0},
             {label:"PDR pré-FND ★", val:pdrDispPre,
              sub:"phase stable",                  col:pdrColor,
              pct:pdrPreFND||0},
@@ -1234,15 +1239,22 @@ export default function FDQNDashboard() {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
 
+                {/* Bandeau explicatif PDR */}
+                <div style={{ background:`${C.amber}08`, border:`1px solid ${C.amber}30`, borderRadius:6, padding:"8px 12px", fontSize:9, color:C.dim, lineHeight:1.8 }}>
+                  <span style={{color:C.amber,fontWeight:700}}>⚠ Deux PDR différents dans ce dashboard :</span><br/>
+                  <span style={{color:C.green}}>■ PDR hop-à-hop (CSV routing)</span> = paquet reçu par le <strong style={{color:C.txt}}>voisin direct</strong> — 99.98% ici (25 pertes sur 158k)<br/>
+                  <span style={{color:pdrColor}}>■ PDR E2E Sink ★ (NS-3 FlowMonitor)</span> = paquet arrivé au <strong style={{color:C.txt}}>Sink/BS</strong> — 99.3% pré-FND · 95.8% final (6 587 pertes)
+                </div>
+
                 {/* KPIs routing */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 8 }}>
                   {[
-                    ["Total paquets",  routing.summary.totalPackets.toLocaleString(),        C.cyan,                                                               "traces RL"],
-                    ["Livrés",         routing.summary.delivered.toLocaleString(),           C.green,                                                              `${routing.summary.pdrGlobal}% (logique)`],
-                    ["Non livrés",     routing.summary.nonDelivered,                         routing.summary.nonDelivered > 0 ? C.red : C.green,                   "pertes"],
-                    ["PDR pré-FND ★",  pdrPreFND ? `${pdrPreFND.toFixed(1)}%` : `${routing.summary.pdrGlobal}%`, pdrColor,                                       "phase stable"],
-                    ["E drain moy",    `${(routing.summary.drainMoy*1000).toFixed(2)}mJ`,   C.amber,                                                              "par nœud total"],
-                    ["Nœuds actifs",   routing.summary.nNodes,                               C.purple,                                                             `${routing.summary.nCHActive} CH`],
+                    ["Total paquets",       routing.summary.totalPackets.toLocaleString(),        C.cyan,                                                               "traces RL"],
+                    ["Livrés (1er saut)",   routing.summary.delivered.toLocaleString(),           C.green,                                                              `${routing.summary.pdrGlobal}% hop-à-hop`],
+                    ["Non livrés (1er saut)", routing.summary.nonDelivered,                       routing.summary.nonDelivered > 0 ? C.red : C.green,                   "échec hop local"],
+                    ["PDR E2E pré-FND ★",   pdrPreFND ? `${pdrPreFND.toFixed(1)}%` : `${routing.summary.pdrGlobal}%`, pdrColor,                                       "Sink · phase stable"],
+                    ["E drain moy",          `${(routing.summary.drainMoy*1000).toFixed(2)}mJ`,   C.amber,                                                              "par nœud total"],
+                    ["Nœuds actifs",         routing.summary.nNodes,                               C.purple,                                                             `${routing.summary.nCHActive} CH`],
                   ].map(([l, v, c, sub]) => (
                     <div key={l} style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8,
                       padding: "10px 13px", position: "relative", overflow: "hidden" }}>
