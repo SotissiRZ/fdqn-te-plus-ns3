@@ -15,7 +15,7 @@ class FdqnConfig:
     SINK_X          = 500.0
     SINK_Y          = 500.0
     RADIO_RANGE     = 150.0     # Portée radio physique (m) — valeur simulation actuelle
-    N_NODES         = 300       # Scénario référence rapport (ch5: 50/100/200/300)
+    N_NODES         = 300      # Scénario référence rapport (ch5: 50/100/200/300)
     N_CLUSTERS      = 30        # Cible IFO : rapport fixe explicitement 30 [CORR écart 2]
     CLUSTER_MEM_MIN = 8
     CLUSTER_MEM_MAX = 12
@@ -70,7 +70,7 @@ class FdqnConfig:
     # ── PEPM ──────────────────────────────────────────────────────────────────
     PEPM_HIDDEN     = 64        # Cellules LSTM cachées
     PEPM_WINDOW     = 10        # Fenêtre historique énergie
-    PEPM_RISK_THRESHOLD = 0.5   # Seuil alerte : synchronisé avec fdqn_config.h (0.7)
+    PEPM_RISK_THRESHOLD = 0.7   # Seuil alerte — sync avec fdqn_config.h et eval_config.h :
     PEPM_TE_MAX     = 0.5       # Risque progressif dès E_norm < 50% (sync fdqn_config.h)
                                 # TE_pred(t) = σ(lstm) × TE_MAX
                                 # → si E_résiduelle < TE_pred → nœud à risque

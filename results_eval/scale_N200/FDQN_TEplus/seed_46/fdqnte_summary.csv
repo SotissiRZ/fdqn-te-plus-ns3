@@ -1,0 +1,26 @@
+# FDQN-TE+ Summary
+Param,Value
+N,200
+AliveNodes,20
+DeadNodes,180
+EnergyMean_J,0.045197
+EnergyTotalConsumed_J,239.096051
+PDR_RL_pct,96.73
+PDR_RL_preFND_pct,99.28
+PDR_NS3_pct,93.74
+AvgDelay_ms,16.43
+TxPackets,76175
+RxPackets,71403
+RL_PktEmitted,115847
+RL_PktDelivered,112063
+IFO_Rounds,35
+FND_t,2187.00
+HND_t,2887.00
+LND_t,3422.00
+RL_Steps,115847
+FedRounds,0
+Seed,46
+SimDuration_s,3500.00
+RadioRange_m,150.00
+AreaSize_m,816.50
+InitEnergy_J,1.20

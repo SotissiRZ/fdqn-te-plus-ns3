@@ -1,0 +1,14 @@
+# Summary: HEED
+Metric,Value
+Model,HEED
+FND_s,617
+HND_s,2422
+LND_s,0
+PDR_Stable_pct,95.5175
+PDR_Global_pct,91.7617
+AvgDelay_ms,8.9392
+TotalEnergyConsumed_J,239.261
+AvgEnergyGini,0
+TotalPktSent,94728
+TotalPktRecv,86924
+TotalRounds,69

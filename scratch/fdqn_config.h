@@ -137,11 +137,15 @@ constexpr double   LAMBDA_SAFE    = 0.10;  // Sécurité PEPM
 constexpr double   LAMBDA_HIER    = 0.15;  // Bonus hiérarchie LEACH
 // Somme λi = 1.0 ✓
 
+// Référence : Heinzelman 2002 eq. (4)-(5) : énergie définie par ROUND, pas par step.
+constexpr uint32_t DRAIN_BITS_PER_STEP = static_cast<uint32_t>(
+    DRAIN_BITS * (5.0 / 100.0));  // = 400 bits/step  (RL_STEP=5s, RECLUSTER=100s)
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 6. PEPM (Predictive Energy & Path Management)
 // ─────────────────────────────────────────────────────────────────────────────
 
-constexpr double   PEPM_RISK_THRESHOLD = 0.5;  // Seuil alerte : détection dès mi-vie (sync pepm_lstm.py)
+constexpr double   PEPM_RISK_THRESHOLD = 0.7;  // Seuil alerte : détection dès mi-vie (sync pepm_lstm.py)
 constexpr double   PEPM_TE_MAX         = 0.5;  // Risque progressif dès E_norm < 50% (sync pepm_lstm.py)
 constexpr double   PEPM_ALPHA          = 0.1;  // Taux d'apprentissage PEPM
 constexpr int      PEPM_HIDDEN     = 64;

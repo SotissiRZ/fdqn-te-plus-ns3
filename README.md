@@ -1,174 +1,199 @@
-# The Network Simulator, Version 3
+# FDQN-TE+ : Guide d'installation et d'utilisation
+> Chapitre 4 — Implémentation et simulation NS-3
 
+## 1. Architecture du projet
 
-[![codecov](https://codecov.io/gh/nsnam/ns-3-dev-git/branch/master/graph/badge.svg)](https://codecov.io/gh/nsnam/ns-3-dev-git/branch/master/)
-[![Gitlab CI](https://gitlab.com/nsnam/ns-3-dev/badges/master/pipeline.svg)](https://gitlab.com/nsnam/ns-3-dev/-/pipelines)
-[![Github CI](https://github.com/nsnam/ns-3-dev-git/actions/workflows/per_commit.yml/badge.svg)](https://github.com/nsnam/ns-3-dev-git/actions)
+```
+fdqn-te-plus/
+│
+├── scratch/                          ← Simulations NS-3 (tous les modèles)
+│   ├── eval_config.h                 ← Paramètres communs (N, E_init, RADIO_RANGE…)
+│   ├── eval_common.h                 ← Fonctions partagées (drain, summary, métriques)
+│   ├── leach_energy.h                ← Modèle radio LEACH (Heinzelman 2002)
+│   │
+│   ├── leach_sim.cc                  ← Baseline 1 : LEACH
+│   ├── heed_sim.cc                   ← Baseline 2 : HEED
+│   ├── qrouting_sim.cc               ← Baseline 3 : Q-Routing tabulaire
+│   ├── fdqn_te_plus_noPEPM.cc       ← Ablation : sans PEPM
+│   ├── fdqn_te_plus_noFed.cc        ← Ablation : sans Fédération
+│   ├── fdqn_noIFO.cc                 ← Ablation : sans IFO (DQN-LEACH baseline DRL)
+│   ├── fdqn_te_plus_eval.cc         ← FDQN-TE+ complet (évaluation)
+│   │
+│   ├── rl_server_eval.py             ← Serveur FDQN-TE+   (port 5555)
+│   ├── rl_server_nopepm.py           ← Serveur sans PEPM  (port 5556)
+│   ├── rl_server_nofed.py            ← Serveur sans Fed   (port 5557)
+│   ├── rl_server_dqnleach.py         ← Serveur DQN-LEACH  (port 5559)
+│   │
+│   ├── run_multiseed.sh              ← Lance les 7 modèles × 5 seeds
+│   └── aggregate_results.py          ← Agrégation multi-seeds, IC95%, graphes
+│
+├── model/
+│   ├── ifo/
+│   │   ├── ifo-clustering.h          ← Interface C++ du clustering IFO
+│   │   └── ifo-clustering.cc         ← Implémentation des 5 phases IFO
+│   │
+│   ├── addqn/
+│   │   ├── addqn-routing.h           ← Interface C++ du bridge agent ADDQN
+│   │   └── addqn_agent.py            ← Agent Double DQN (NumPy pur)
+│   │
+│   ├── pepm/
+│   │   └── pepm_lstm.py              ← Module LSTM de prédiction énergétique
+│   │
+│   └── federated/
+│       └── fedmeta_drl.py            ← Agrégation FedAvg + méta-adaptation
+│
+├── results/                          ← Sorties de simulation (auto-créé)
+│   ├── fdqnte_stats.csv
+│   ├── flow_monitor.xml
+│   └── fdqnte_animation.xml
+│
+└── CMakeLists.txt                    ← Configuration de build NS-3
+```
 
+---
 
-## Table of Contents
+## 2. Prérequis
 
-1) [An overview](#an-open-source-project)
-2) [Building ns-3](#building-ns-3)
-3) [Running ns-3](#running-ns-3)
-4) [Getting access to the ns-3 documentation](#getting-access-to-the-ns-3-documentation)
-5) [Working with the development version of ns-3](#working-with-the-development-version-of-ns-3)
+| Outil     | Version recommandée | Rôle                          |
+|-----------|---------------------|-------------------------------|
+| NS-3      | 3.39+               | Simulateur réseau             |
+| Python    | 3.10+               | Agents RL (ADDQN, PEPM, Fed)  |
+| NumPy     | 1.24+               | Calcul numérique              |
+| CMake     | 3.13+               | Build système                 |
+| NetAnim   | optionnel           | Visualisation                 |
 
-> **NOTE**: Much more substantial information about ns-3 can be found at
-<https://www.nsnam.org>
-
-## An Open Source project
-
-ns-3 is a free open source project aiming to build a discrete-event
-network simulator targeted for simulation research and education.
-This is a collaborative project; we hope that
-the missing pieces of the models we have not yet implemented
-will be contributed by the community in an open collaboration
-process.
-
-The process of contributing to the ns-3 project varies with
-the people involved, the amount of time they can invest
-and the type of model they want to work on, but the current
-process that the project tries to follow is described here:
-<https://www.nsnam.org/developers/contributing-code/>
-
-This README excerpts some details from a more extensive
-tutorial that is maintained at:
-<https://www.nsnam.org/documentation/latest/>
-
-## Building ns-3
-
-The code for the framework and the default models provided
-by ns-3 is built as a set of libraries. User simulations
-are expected to be written as simple programs that make
-use of these ns-3 libraries.
-
-To build the set of default libraries and the example
-programs included in this package, you need to use the
-tool 'ns3'. Detailed information on how to use ns3 is
-included in the file doc/build.txt
-
-However, the real quick and dirty way to get started is to
-type the command
-
-```shell
+```bash
+# Installation NS-3 (Ubuntu/Debian)
+sudo apt install g++ python3 python3-dev cmake ninja-build git
+git clone https://gitlab.com/nsnam/ns-3-dev.git ns-3
+cd ns-3
 ./ns3 configure --enable-examples
+
+# Dépendances Python
+pip install numpy scipy pandas matplotlib
 ```
 
-followed by
+---
 
-```shell
-./ns3
+## 3. Installation du module FDQN-TE+
+
+```bash
+# 1. Copier les fichiers scratch dans NS-3
+cp scratch/*.cc scratch/*.h scratch/*.py \
+   ~/ns-allinone-3.39/ns-3.39/scratch/
+
+# 2. Compiler
+cd ~/ns-allinone-3.39/ns-3.39
+./ns3 build
 ```
 
-in the directory which contains this README file. The files
-built will be copied in the build/ directory.
+---
 
-The current codebase is expected to build and run on the
-set of platforms listed in the [release notes](RELEASE_NOTES.md)
-file.
+## 4. Paramètres de simulation
 
-Other platforms may or may not work: we welcome patches to
-improve the portability of the code to these other platforms.
+| Paramètre     | Défaut  | Description                                  |
+|---------------|---------|----------------------------------------------|
+| `nNodes`      | 300     | Nombre de nœuds capteurs                     |
+| `areaSize`    | 1000    | Côté de la zone de déploiement (m)           |
+| `radioRange`  | **150** | Portée radio maximale (m)                    |
+| `initEnergy`  | **1.2** | Énergie initiale par nœud (J)               |
+| `simDuration` | **3500**| Durée de simulation (s)                      |
+| `seed`        | 42      | Graine aléatoire                             |
+| `fedRound`    | 50      | Période d'agrégation fédérée (steps)         |
+| `lstmHidden`  | 64      | Neurones cachés du LSTM (PEPM)               |
+| `histWindow`  | 10      | Fenêtre temporelle du LSTM                   |
+| `gamma`       | 0.9     | Facteur d'actualisation (ADDQN)              |
+| `epsilonMax`  | 0.9     | Exploration initiale                         |
+| `epsilonMin`  | 0.1     | Exploration minimale                         |
 
-## Running ns-3
+> **Paramètres modifiés** par rapport aux versions préliminaires :
+> `radioRange` 100 m → **150 m**, `initEnergy` 2.0 J → **1.2 J**,
+> `simDuration` 3000 s → **3500 s**.
 
-On recent Linux systems, once you have built ns-3 (with examples
-enabled), it should be easy to run the sample programs with the
-following command, such as:
+---
 
-```shell
-./ns3 run simple-global-routing
+## 5. Lancement rapide
+
+### Simulation FDQN-TE+ complète
+
+```bash
+cd ~/ns-allinone-3.39/ns-3.39
+
+# Démarrer le serveur RL
+python3 scratch/rl_server_eval.py &
+
+# Lancer la simulation
+./ns3 run "scratch/fdqn_te_plus_eval \
+  --nNodes=300 --seed=42 \
+  --resultsDir=results_eval/FDQN_TEplus/seed_42"
+
+kill %1
 ```
 
-That program should generate a `simple-global-routing.tr` text
-trace file and a set of `simple-global-routing-xx-xx.pcap` binary
-pcap trace files, which can be read by `tcpdump -tt -r filename.pcap`
-The program source can be found in the examples/routing directory.
+### Évaluation comparative complète (7 modèles × 5 seeds)
 
+```bash
+chmod +x scratch/run_multiseed.sh
+scratch/run_multiseed.sh --seeds "42 43 44 45 46"
 
-## Running ns-3 from python
-
-If you do not plan to modify ns-3 upstream modules, you can get
-a pre-built version of the ns-3 python bindings.
-
-```shell
-pip install --user ns3
+# Agréger et générer les graphes
+python3 scratch/aggregate_results.py \
+  --results_dir results_eval \
+  --seeds 42 43 44 45 46 \
+  --outdir results_eval/figures_multiseed
 ```
 
-If you do not have `pip`, check their documents
-on [how to install it](https://pip.pypa.io/en/stable/installation/).
+### Tests unitaires Python (sans NS-3)
 
-After installing the `ns3` package, you can then create your simulation python script.
-Below is a trivial demo script to get you started.
-
-```python
-from ns import ns
-
-ns.LogComponentEnable("Simulator", ns.LOG_LEVEL_ALL)
-
-ns.Simulator.Stop(ns.Seconds(10))
-ns.Simulator.Run()
-ns.Simulator.Destroy()
+```bash
+python3 model/addqn/addqn_agent.py
+python3 model/pepm/pepm_lstm.py
+python3 model/federated/fedmeta_drl.py
 ```
 
-The simulation will take a while to start, while the bindings are loaded.
-The script above will print the logging messages for the called commands.
+---
 
-Use `help(ns)` to check the prototypes for all functions defined in the
-ns3 namespace. To get more useful results, query specific classes of
-interest and their functions e.g. `help(ns.Simulator)`.
+## 6. Métriques de sortie
 
-Smart pointers `Ptr<>` can be differentiated from objects by checking if
-`__deref__` is listed in `dir(variable)`. To dereference the pointer,
-use `variable.__deref__()`.
+| Métrique               | Description                                        |
+|------------------------|----------------------------------------------------|
+| FND (First Node Death) | Temps où le 1er nœud meurt (s)                    |
+| HND (Half Node Death)  | Temps où 50 % des nœuds sont morts (s)            |
+| LND-90%                | Temps où 90 % des nœuds sont morts (s)            |
+| PDR stable (pré-FND)   | Taux de livraison avant FND (%)                   |
+| PDR global             | Taux de livraison sur toute la simulation (%)      |
+| Délai moyen            | Délai bout-en-bout moyen FlowMonitor (ms)          |
+| Énergie consommée      | Énergie totale drainée depuis t=0 (J)              |
+| Équilibre énergie      | Gini des énergies résiduelles                      |
 
-Most ns-3 simulations are written in C++ and the documentation is
-oriented towards C++ users. The ns-3 tutorial programs (first.cc,
-second.cc, etc.) have Python equivalents, if you are looking for
-some initial guidance on how to use the Python API. The Python
-API may not be as full-featured as the C++ API, and an API guide
-for what C++ APIs are supported or not from Python do not currently exist.
-The project is looking for additional Python maintainers to improve
-the support for future Python users.
+Les résultats sont sauvegardés dans :
+- `fdqnte_summary.csv` — scalaires finaux (FDQN-TE+, ablations, DQN-LEACH)
+- `summary.csv` — scalaires finaux (LEACH, HEED, Q-Routing)
+- `energy/fdqnte_energy.csv` — séries temporelles
+- `figures_multiseed/` — graphes PNG avec IC95%
 
-## Getting access to the ns-3 documentation
+---
 
-Once you have verified that your build of ns-3 works by running
-the simple-point-to-point example as outlined in 3) above, it is
-quite likely that you will want to get started on reading
-some ns-3 documentation.
+## 7. Flux de données résumé
 
-All of that documentation should always be available from
-the ns-3 website: <https://www.nsnam.org/documentation/>.
-
-This documentation includes:
-
-- a tutorial
-- a reference manual
-- models in the ns-3 model library
-- a wiki for user-contributed tips: <https://www.nsnam.org/wiki/>
-- API documentation generated using doxygen: this is
-  a reference manual, most likely not very well suited
-  as introductory text:
-  <https://www.nsnam.org/doxygen/index.html>
-
-## Working with the development version of ns-3
-
-If you want to download and use the development version of ns-3, you
-need to use the tool `git`. A quick and dirty cheat sheet is included
-in the manual, but reading through the git
-tutorials found in the Internet is usually a good idea if you are not
-familiar with it.
-
-If you have successfully installed git, you can get
-a copy of the development version with the following command:
-
-```shell
-git clone https://gitlab.com/nsnam/ns-3-dev.git
+```
+Nœud capteur
+  │
+  ├─ Observe état s_i(t) = [E_i, d_i, ETX_ij, Q_i, σ_PEPM]
+  │
+  ├─ PEPM (LSTM) → prédit risque σ → enrichit état
+  │
+  ├─ ADDQN → choisit next hop a_i (ε-greedy Double DQN)
+  │
+  ├─ Transmet le paquet → reçoit récompense r_i(t)
+  │
+  ├─ Stocke (s, a, r, s') dans Replay Memory
+  │
+  └─ Apprend (Double DQN, batch=32)
+       │
+       └── Toutes les 50 steps (FedRound) :
+             CH agrège modèles des membres (FedAvg intra-cluster)
+             Sink agrège modèles des CH (FedAvg global + FedMeta)
+             Modèle global → diffusé à tous les nœuds
 ```
 
-However, we recommend to follow the Gitlab guidelines for starters,
-that includes creating a Gitlab account, forking the ns-3-dev project
-under the new account's name, and then cloning the forked repository.
-You can find more information in the [manual](https://www.nsnam.org/docs/manual/html/working-with-git.html).

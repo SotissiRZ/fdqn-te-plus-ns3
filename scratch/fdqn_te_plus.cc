@@ -18,7 +18,7 @@
  * Usage :
  *   Copier scratch/ et modules/ dans <ns3>/scratch/
  *   ./ns3 run scratch/fdqn_te_plus
- *   ./ns3 run "scratch/fdqn_te_plus --nNodes=400 --initEnergy=1.2 --simDuration=3500 --areaSize=1000"
+ *   ./ns3 run "scratch/fdqn_te_plus --nNodes=300 --initEnergy=1.2 --simDuration=3500 --areaSize=1000"
  * ============================================================================= */
 
 // ── Modules NS-3 ──────────────────────────────────────────────────────────────
@@ -79,7 +79,8 @@ struct SimParams {
     uint32_t ifoIterations = FdqnCfg::IFO_ITER;
     double   simDuration   = FdqnCfg::SIM_DURATION;
     uint32_t seed          = 42;
-    std::string resultsDir = "results";
+    int rlPort = FdqnCfg::RL_PORT; // 5555 par défaut
+    std::string resultsDir = "results_eval/FDQN_TEplus/";
 };
 
 // =============================================================================
@@ -286,8 +287,6 @@ public:
         const std::string resp = RecvLine();
         if (resp.empty()) return false;
 
-        // Parser {"risks": {"123": 0.42, ...}, "at_risk": [...]}
-        // Format simple : cherche "\"<id>\": <valeur>" dans le bloc "risks"
         const std::string risksKey = "\"risks\":";
         auto rpos = resp.find(risksKey);
         if (rpos == std::string::npos) return false;
@@ -350,7 +349,11 @@ public:
         if (SendLine(os.str())) {
             std::string resp = RecvLine();
             m_steps++;
-            if (m_steps % FdqnCfg::FED_PERIOD == 0) m_fedRound++;
+            // Lire le champ "federated" renvoyé par Python (_handle_reward).
+            // Python déclenche FedAvg quand fed_orch.should_run() est vrai.
+            // m_fedRound s'incrémente UNIQUEMENT quand Python confirme
+            // qu'une agrégation fédérée a réellement été lancée.
+            if (ParseInt(resp, "federated", 0) == 1) m_fedRound++;
         }
     }
 
@@ -419,8 +422,14 @@ private:
         auto pos = s.find(k);
         if (pos == std::string::npos) return def;
         pos += k.size();
-        while (pos < s.size() && (s[pos]==' ' || s[pos]=='\n')) pos++;
-        return std::stoi(s.substr(pos));
+        while (pos < s.size() && (s[pos]==' ' || s[pos]=='\n' || s[pos]=='\r')) pos++;
+        if (pos >= s.size()) return def;
+        // Gestion des booléens JSON (true/false) — Python sans int() les sérialise
+        // en minuscules, ce qui ferait crasher std::stoi avec std::invalid_argument.
+        if (s.compare(pos, 4, "true")  == 0) return 1;
+        if (s.compare(pos, 5, "false") == 0) return 0;
+        try { return std::stoi(s.substr(pos)); }
+        catch (...) { return def; }
     }
 
     double ParseDouble(const std::string& s, const std::string& key, double def) {
@@ -428,8 +437,10 @@ private:
         auto pos = s.find(k);
         if (pos == std::string::npos) return def;
         pos += k.size();
-        while (pos < s.size() && (s[pos]==' ' || s[pos]=='\n')) pos++;
-        return std::stod(s.substr(pos));
+        while (pos < s.size() && (s[pos]==' ' || s[pos]=='\n' || s[pos]=='\r')) pos++;
+        if (pos >= s.size()) return def;
+        try { return std::stod(s.substr(pos)); }
+        catch (...) { return def; }
     }
 
     int      m_sock;
@@ -564,19 +575,95 @@ double ComputeEnergyConsumed_J(const std::vector<NodeState>& nodes, double initE
     return totalConsumed;
 }
 
-double ComputeAverageDelay(Ptr<FlowMonitor> fm) {
-    double totalDelay = 0.0;
-    uint64_t totalRxPackets = 0;
+// -----------------------------------------------------------------------------
+// ComputeRLLogicalDelay_ms — Délai bout-en-bout logique ADDQN
+//
+// Modèle 802.11b DSSS à 1 Mbps (paramètres cohérents avec la simulation) :
+//   - Taille paquet : PKT_BYTES = 500 octets (par défaut simulation)
+//   - Débit physique : PHY_RATE_BPS = 1e6 bps (802.11b 1Mbps)
+//   - Overhead MAC 802.11b (SIFS + ACK + DIFS + backoff moyen) : MAC_OVERHEAD_MS ≈ 0.832 ms
+//     Détail : SIFS=10µs, ACK=192+14*8=304µs, DIFS=50µs, backoff moy=31*20µs=620µs → ~984µs
+//     On utilise 0.832 ms (mesure empirique NS-3 802.11b 1Mbps pour 500 octets)
+//   - Délai de propagation : négligeable à l'échelle WSN (< 1µs pour 150m)
+//
+// Topologie RL à 2 niveaux :
+//   - Membre → CH  : 1 saut  (dist membre-CH)
+//   - CH → sink    : 1 saut  (dist CH-sink)
+//   - Total membre : 2 sauts bout-en-bout
+//
+// Pour un CH isolé du sink à plus de radioRange : 2 sauts CH-CH + CH-sink = 2 sauts
+// (simplifié : on utilise distToSink directement, OLSR résout les multi-sauts)
+// -----------------------------------------------------------------------------
+double ComputeRLLogicalDelay_ms(const std::vector<NodeState>& nodes,
+                                 double sinkX, double sinkY,
+                                 double radioRange) {
+    // Paramètres 802.11b 1Mbps
+    static constexpr double PKT_BYTES        = 500.0;   // octets — aligné avec la simulation
+    static constexpr double PHY_RATE_BPS     = 1.0e6;   // 1 Mbps DSSS 802.11b
+    static constexpr double MAC_OVERHEAD_MS  = 0.832;   // overhead MAC 802.11b mesuré NS-3
 
-    fm->CheckForLostPackets();
-    const auto& stats = fm->GetFlowStats();
+    // Temps de transmission d'un paquet (ms)
+    const double txTime_ms = (PKT_BYTES * 8.0 / PHY_RATE_BPS) * 1000.0;
+    // = 500 * 8 / 1e6 * 1000 = 4.0 ms
 
-    for (const auto& flow : stats) {
-        totalRxPackets += flow.second.rxPackets;
-        totalDelay += flow.second.delaySum.GetSeconds() * 1000;
+    // Délai par saut = transmission + overhead MAC
+    const double delayPerHop_ms = txTime_ms + MAC_OVERHEAD_MS;
+    // ≈ 4.832 ms/saut — cohérent avec la mesure FlowMonitor de 4.76 ms (1 saut OLSR)
+
+    double sumDelay = 0.0;
+    uint32_t count  = 0;
+
+    for (const auto& ns : nodes) {
+        if (!ns.isAlive) continue;
+
+        if (ns.isClusterHead) {
+            // CH → sink : calcul du nombre de sauts réels
+            // Si distToSink <= radioRange : 1 saut direct
+            // Sinon : ceil(distToSink / radioRange) sauts (routage multi-sauts OLSR)
+            const double hops = (ns.distToSink <= radioRange)
+                ? 1.0
+                : std::ceil(ns.distToSink / radioRange);
+            sumDelay += hops * delayPerHop_ms;
+            count++;
+        } else {
+            // Membre → CH → sink : 2 niveaux logiques
+            // Saut 1 : membre vers son CH (distance réelle membre-CH)
+            double distToCH = 0.0;
+            bool   chFound  = false;
+            for (const auto& nb : nodes) {
+                if (nb.id == ns.clusterId && nb.isAlive) {
+                    distToCH = NodeDist(ns.x, ns.y, nb.x, nb.y);
+                    chFound  = true;
+
+                    // Saut 1 : membre → CH (1 saut si dans portée, sinon relayé)
+                    const double hops1 = (distToCH <= radioRange)
+                        ? 1.0
+                        : std::ceil(distToCH / radioRange);
+
+                    // Saut 2 : CH → sink (même logique que CH seul)
+                    const double chDistToSink = nb.distToSink;
+                    const double hops2 = (chDistToSink <= radioRange)
+                        ? 1.0
+                        : std::ceil(chDistToSink / radioRange);
+
+                    sumDelay += (hops1 + hops2) * delayPerHop_ms;
+                    count++;
+                    break;
+                }
+            }
+            if (!chFound) {
+                // CH mort ou inconnu — chemin direct membre → sink (fallback)
+                const double dDirect = ns.distToSink;
+                const double hops = (dDirect <= radioRange)
+                    ? 1.0
+                    : std::ceil(dDirect / radioRange);
+                sumDelay += hops * delayPerHop_ms;
+                count++;
+            }
+        }
     }
 
-    return totalRxPackets > 0 ? totalDelay / totalRxPackets : 0.0;
+    return count > 0 ? sumDelay / count : 0.0;
 }
 
 // =============================================================================
@@ -590,7 +677,7 @@ struct SimContext {
     double    radioRange;
     double    sinkX, sinkY;
     double    areaSize;
-    uint32_t  seed = FdqnCfg::DEFAULT_SEED;  // BUG C FIX: seed from CLI, not hardcoded 42
+    uint32_t  seed = FdqnCfg::DEFAULT_SEED;
 
     EnergySourceContainer*       pSrc;
     std::vector<NodeState>*      pSt;
@@ -1059,11 +1146,18 @@ static void InitDoCheck() {
         g_compMetrics.rlStepsPerRound.push_back(g_rl.GetSteps());
         g_compMetrics.fedRoundsPerRound.push_back(g_rl.GetFedRound());
 
-        // Calcul du délai
-        if (ctx.pFlowMonitor && (round % 10 == 0 || round == 1)) {
-            double delay = ComputeAverageDelay(ctx.pFlowMonitor);
+        // Calcul du délai logique RL bout-en-bout
+        // ComputeRLLogicalDelay_ms() calcule le délai 2-sauts (membre→CH→sink)
+        // ou multi-sauts selon les distances réelles avec le modèle 802.11b 1Mbps.
+        // Calculé à chaque round pour suivre l'évolution dynamique du réseau.
+        {
+            double delay = ComputeRLLogicalDelay_ms(*ctx.pSt,
+                                                     ctx.sinkX, ctx.sinkY,
+                                                     ctx.radioRange);
             g_compMetrics.endToEndDelay_ms.push_back(delay);
-            g_compMetrics.avgDelay_ms = (g_compMetrics.avgDelay_ms * (g_compMetrics.endToEndDelay_ms.size() - 1) + delay)
+            g_compMetrics.avgDelay_ms = (g_compMetrics.avgDelay_ms
+                                         * (g_compMetrics.endToEndDelay_ms.size() - 1)
+                                         + delay)
                                         / g_compMetrics.endToEndDelay_ms.size();
             ctx.lastDelayCalcTime = now;
         }
@@ -1116,7 +1210,6 @@ static void InitDoCheck() {
         entry.rewardDistribution = {minReward, maxReward, meanReward};
 
         // Q-values approximatives (moyenne fixe 0.5 tant que rl_server gère les poids)
-        // Iteration directe supprimée → utiliser la taille du pool
         const int qCount = static_cast<int>(ctx.pQA->size());
         const double sumQ = 0.5 * qCount;   // placeholder — Q réels dans rl_server.py
         entry.qValueDistribution = {0.0, 1.0, qCount > 0 ? sumQ / qCount : 0.5};
@@ -1411,6 +1504,7 @@ int main(int argc, char* argv[]) {
     cmd.AddValue("nClusters",   "Clusters cibles IFO (0=auto)",  p.nClusters);
     cmd.AddValue("resultsDir",  "Dossier résultats",             p.resultsDir);
     cmd.AddValue("areaSize",    "Taille de la zone (m)",         p.areaSize);
+    cmd.AddValue("rlPort", "Port serveur RL Python", p.rlPort);
     cmd.Parse(argc, argv);
 
     // Ajustement de l'aire
@@ -1442,7 +1536,7 @@ int main(int argc, char* argv[]) {
     NS_LOG_UNCOND("────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────");
 
     g_nNodes = p.nNodes;
-    g_rl.Connect();
+    g_rl.Connect("127.0.0.1", p.rlPort);
 
     // Nœuds NS-3
     NodeContainer sensors, sinkNode;

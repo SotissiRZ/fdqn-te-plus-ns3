@@ -1,0 +1,14 @@
+# Summary: LEACH
+Metric,Value
+Model,LEACH
+FND_s,187
+HND_s,642
+LND_s,2777
+PDR_Stable_pct,53.7391
+PDR_Global_pct,55.6925
+AvgDelay_ms,8.456
+TotalEnergyConsumed_J,235.475
+AvgEnergyGini,0
+TotalPktSent,43250
+TotalPktRecv,24087
+TotalRounds,55

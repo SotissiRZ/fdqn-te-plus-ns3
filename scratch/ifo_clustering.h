@@ -173,6 +173,28 @@ public:
     uint32_t GetRound()   const { return m_round; }
     uint32_t GetNCH()     const { return static_cast<uint32_t>(m_clusters.size()); }
 
+    /**
+     * Injecte un clustering calculé externalement (ex. LEACH probabiliste)
+     * dans le conteneur interne de l'objet IFO.
+     *
+     * Après cet appel, GetClusters(), GetStats() et TriggerProactiveRecluster()
+     * opèrent sur ce clustering — exactement comme après un appel à Run().
+     * GetRound() reste inchangé (ne s'incrémente pas ici, contrairement à Run()).
+     *
+     * @param clusters  Vecteur de ClusterInfo construit par l'appelant.
+     *                  Chaque ClusterInfo doit avoir chId + members remplis.
+     */
+    void SetClustersFromExternal(const std::vector<ClusterInfo>& clusters) {
+        m_clusters = clusters;   // remplace l'état interne
+
+        // Reconstruire l'index chId → idx pour les accès rapides
+        m_chToIdx.clear();
+        for (uint32_t idx = 0; idx < m_clusters.size(); idx++)
+            m_chToIdx[m_clusters[idx].chId] = idx;
+
+        // m_round intentionnellement NON incrémenté → IFORound=0 en noIFO
+    }
+
     /** Statistiques membres/cluster pour validation */
     struct ClusterStats {
         uint32_t nClusters;

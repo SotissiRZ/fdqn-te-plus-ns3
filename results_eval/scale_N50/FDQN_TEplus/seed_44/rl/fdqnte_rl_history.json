@@ -1,0 +1,1772 @@
+{
+  "simulation_info": {
+    "nNodes": 50,
+    "initEnergy_J": 1.2,
+    "simDuration_s": 3500,
+    "areaSize_m": 408.248,
+    "radioRange_m": 150,
+    "seed": 44
+  },
+  "metrics": {
+    "fnd_time_s": 3032,
+    "hnd_time_s": 0,
+    "lnd_time_s": 0,
+    "total_rounds": 70,
+    "avg_pdr_RL_pct": 99.5598,
+    "avg_pdr_NS3_pct": 0,
+    "avg_delay_ms": 11.9597,
+    "total_energy_consumed_J": 56.9152
+  },
+  "history": [
+    {
+      "round": 1,
+      "timestamp_s": 50.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 1.184372,
+      "total_energy_consumed_J": 0.781414,
+      "pdr_RL_pct": 100.00,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 9.57,
+      "rl_steps": 500,
+      "fed_round": 10,
+      "n_clusters": 5,
+      "at_risk_pepm": 0,
+      "rewards": {
+        "min": 6.50,
+        "max": 8.95,
+        "mean": 8.69
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 2,
+      "timestamp_s": 100.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 1.168715,
+      "total_energy_consumed_J": 1.564262,
+      "pdr_RL_pct": 100.00,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 9.57,
+      "rl_steps": 1000,
+      "fed_round": 20,
+      "n_clusters": 5,
+      "at_risk_pepm": 0,
+      "rewards": {
+        "min": 12.59,
+        "max": 17.90,
+        "mean": 17.31
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 3,
+      "timestamp_s": 150.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 1.152810,
+      "total_energy_consumed_J": 2.359524,
+      "pdr_RL_pct": 100.00,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 9.76,
+      "rl_steps": 1500,
+      "fed_round": 30,
+      "n_clusters": 4,
+      "at_risk_pepm": 0,
+      "rewards": {
+        "min": 21.06,
+        "max": 26.81,
+        "mean": 25.80
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 4,
+      "timestamp_s": 200.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 1.136772,
+      "total_energy_consumed_J": 3.161418,
+      "pdr_RL_pct": 100.00,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 9.86,
+      "rl_steps": 2000,
+      "fed_round": 40,
+      "n_clusters": 4,
+      "at_risk_pepm": 0,
+      "rewards": {
+        "min": 29.73,
+        "max": 35.73,
+        "mean": 34.25
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 5,
+      "timestamp_s": 250.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 1.121827,
+      "total_energy_consumed_J": 3.908662,
+      "pdr_RL_pct": 100.00,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 9.80,
+      "rl_steps": 2500,
+      "fed_round": 50,
+      "n_clusters": 5,
+      "at_risk_pepm": 0,
+      "rewards": {
+        "min": 38.45,
+        "max": 44.59,
+        "mean": 42.73
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 6,
+      "timestamp_s": 300.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 1.106807,
+      "total_energy_consumed_J": 4.659664,
+      "pdr_RL_pct": 100.00,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 9.76,
+      "rl_steps": 3000,
+      "fed_round": 60,
+      "n_clusters": 5,
+      "at_risk_pepm": 0,
+      "rewards": {
+        "min": 47.02,
+        "max": 53.44,
+        "mean": 51.20
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 7,
+      "timestamp_s": 350.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 1.091378,
+      "total_energy_consumed_J": 5.431117,
+      "pdr_RL_pct": 100.00,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 9.79,
+      "rl_steps": 3500,
+      "fed_round": 70,
+      "n_clusters": 5,
+      "at_risk_pepm": 0,
+      "rewards": {
+        "min": 54.95,
+        "max": 62.32,
+        "mean": 59.57
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 8,
+      "timestamp_s": 400.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 1.075963,
+      "total_energy_consumed_J": 6.201830,
+      "pdr_RL_pct": 100.00,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 9.81,
+      "rl_steps": 4000,
+      "fed_round": 80,
+      "n_clusters": 5,
+      "at_risk_pepm": 0,
+      "rewards": {
+        "min": 62.63,
+        "max": 71.21,
+        "mean": 67.91
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 9,
+      "timestamp_s": 450.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 1.060659,
+      "total_energy_consumed_J": 6.967045,
+      "pdr_RL_pct": 99.82,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 10.01,
+      "rl_steps": 4500,
+      "fed_round": 90,
+      "n_clusters": 5,
+      "at_risk_pepm": 0,
+      "rewards": {
+        "min": 70.41,
+        "max": 79.85,
+        "mean": 76.19
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 10,
+      "timestamp_s": 500.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 1.045256,
+      "total_energy_consumed_J": 7.737186,
+      "pdr_RL_pct": 99.68,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 10.17,
+      "rl_steps": 5000,
+      "fed_round": 100,
+      "n_clusters": 5,
+      "at_risk_pepm": 0,
+      "rewards": {
+        "min": 78.16,
+        "max": 88.66,
+        "mean": 84.45
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 11,
+      "timestamp_s": 550.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 1.028920,
+      "total_energy_consumed_J": 8.554025,
+      "pdr_RL_pct": 99.71,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 10.28,
+      "rl_steps": 5500,
+      "fed_round": 110,
+      "n_clusters": 4,
+      "at_risk_pepm": 0,
+      "rewards": {
+        "min": 85.95,
+        "max": 96.93,
+        "mean": 92.68
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 12,
+      "timestamp_s": 600.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 1.012598,
+      "total_energy_consumed_J": 9.370093,
+      "pdr_RL_pct": 99.73,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 10.37,
+      "rl_steps": 6000,
+      "fed_round": 120,
+      "n_clusters": 4,
+      "at_risk_pepm": 0,
+      "rewards": {
+        "min": 93.61,
+        "max": 105.67,
+        "mean": 100.87
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 13,
+      "timestamp_s": 650.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.996471,
+      "total_energy_consumed_J": 10.176443,
+      "pdr_RL_pct": 99.71,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 10.60,
+      "rl_steps": 6500,
+      "fed_round": 130,
+      "n_clusters": 5,
+      "at_risk_pepm": 0,
+      "rewards": {
+        "min": 101.24,
+        "max": 113.58,
+        "mean": 109.03
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 14,
+      "timestamp_s": 700.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.980445,
+      "total_energy_consumed_J": 10.977774,
+      "pdr_RL_pct": 99.64,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 10.80,
+      "rl_steps": 7000,
+      "fed_round": 140,
+      "n_clusters": 5,
+      "at_risk_pepm": 1,
+      "rewards": {
+        "min": 108.68,
+        "max": 122.20,
+        "mean": 117.16
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 15,
+      "timestamp_s": 750.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.964444,
+      "total_energy_consumed_J": 11.777802,
+      "pdr_RL_pct": 99.60,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 10.89,
+      "rl_steps": 7500,
+      "fed_round": 150,
+      "n_clusters": 5,
+      "at_risk_pepm": 0,
+      "rewards": {
+        "min": 117.06,
+        "max": 130.03,
+        "mean": 125.31
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 16,
+      "timestamp_s": 800.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.948403,
+      "total_energy_consumed_J": 12.579849,
+      "pdr_RL_pct": 99.61,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 10.97,
+      "rl_steps": 8000,
+      "fed_round": 160,
+      "n_clusters": 5,
+      "at_risk_pepm": 1,
+      "rewards": {
+        "min": 125.34,
+        "max": 137.90,
+        "mean": 133.42
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 17,
+      "timestamp_s": 850.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.932053,
+      "total_energy_consumed_J": 13.397352,
+      "pdr_RL_pct": 99.52,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 10.97,
+      "rl_steps": 8500,
+      "fed_round": 170,
+      "n_clusters": 4,
+      "at_risk_pepm": 0,
+      "rewards": {
+        "min": 133.64,
+        "max": 146.12,
+        "mean": 141.46
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 18,
+      "timestamp_s": 900.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.915704,
+      "total_energy_consumed_J": 14.214802,
+      "pdr_RL_pct": 99.43,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 10.96,
+      "rl_steps": 9000,
+      "fed_round": 180,
+      "n_clusters": 4,
+      "at_risk_pepm": 2,
+      "rewards": {
+        "min": 142.01,
+        "max": 154.36,
+        "mean": 149.48
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 19,
+      "timestamp_s": 950.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.898893,
+      "total_energy_consumed_J": 15.055365,
+      "pdr_RL_pct": 99.44,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.00,
+      "rl_steps": 9500,
+      "fed_round": 190,
+      "n_clusters": 4,
+      "at_risk_pepm": 1,
+      "rewards": {
+        "min": 150.27,
+        "max": 162.53,
+        "mean": 157.40
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 20,
+      "timestamp_s": 1000.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.882835,
+      "total_energy_consumed_J": 15.858248,
+      "pdr_RL_pct": 99.47,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.02,
+      "rl_steps": 10000,
+      "fed_round": 200,
+      "n_clusters": 4,
+      "at_risk_pepm": 2,
+      "rewards": {
+        "min": 157.84,
+        "max": 170.65,
+        "mean": 165.27
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 21,
+      "timestamp_s": 1050.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.865387,
+      "total_energy_consumed_J": 16.730629,
+      "pdr_RL_pct": 99.50,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.05,
+      "rl_steps": 10500,
+      "fed_round": 210,
+      "n_clusters": 4,
+      "at_risk_pepm": 0,
+      "rewards": {
+        "min": 164.88,
+        "max": 178.77,
+        "mean": 173.04
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 22,
+      "timestamp_s": 1100.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.847763,
+      "total_energy_consumed_J": 17.611870,
+      "pdr_RL_pct": 99.52,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.09,
+      "rl_steps": 11000,
+      "fed_round": 220,
+      "n_clusters": 4,
+      "at_risk_pepm": 4,
+      "rewards": {
+        "min": 171.90,
+        "max": 186.96,
+        "mean": 180.76
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 23,
+      "timestamp_s": 1150.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.830958,
+      "total_energy_consumed_J": 18.452095,
+      "pdr_RL_pct": 99.54,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.14,
+      "rl_steps": 11500,
+      "fed_round": 230,
+      "n_clusters": 5,
+      "at_risk_pepm": 0,
+      "rewards": {
+        "min": 178.70,
+        "max": 195.14,
+        "mean": 188.41
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 24,
+      "timestamp_s": 1200.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.814079,
+      "total_energy_consumed_J": 19.296055,
+      "pdr_RL_pct": 99.56,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.19,
+      "rl_steps": 12000,
+      "fed_round": 240,
+      "n_clusters": 5,
+      "at_risk_pepm": 3,
+      "rewards": {
+        "min": 185.44,
+        "max": 203.27,
+        "mean": 196.03
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 25,
+      "timestamp_s": 1250.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.798434,
+      "total_energy_consumed_J": 20.078289,
+      "pdr_RL_pct": 99.44,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.25,
+      "rl_steps": 12500,
+      "fed_round": 250,
+      "n_clusters": 4,
+      "at_risk_pepm": 2,
+      "rewards": {
+        "min": 192.62,
+        "max": 211.29,
+        "mean": 203.73
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 26,
+      "timestamp_s": 1300.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.783501,
+      "total_energy_consumed_J": 20.824969,
+      "pdr_RL_pct": 99.46,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.28,
+      "rl_steps": 13000,
+      "fed_round": 260,
+      "n_clusters": 4,
+      "at_risk_pepm": 3,
+      "rewards": {
+        "min": 199.76,
+        "max": 219.22,
+        "mean": 211.44
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 27,
+      "timestamp_s": 1350.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.767005,
+      "total_energy_consumed_J": 21.649730,
+      "pdr_RL_pct": 99.48,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.27,
+      "rl_steps": 13500,
+      "fed_round": 270,
+      "n_clusters": 5,
+      "at_risk_pepm": 2,
+      "rewards": {
+        "min": 206.77,
+        "max": 227.13,
+        "mean": 219.17
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 28,
+      "timestamp_s": 1400.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.751303,
+      "total_energy_consumed_J": 22.434837,
+      "pdr_RL_pct": 99.50,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.27,
+      "rl_steps": 14000,
+      "fed_round": 280,
+      "n_clusters": 5,
+      "at_risk_pepm": 1,
+      "rewards": {
+        "min": 213.68,
+        "max": 234.96,
+        "mean": 226.86
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 29,
+      "timestamp_s": 1450.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.735828,
+      "total_energy_consumed_J": 23.208576,
+      "pdr_RL_pct": 99.48,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.27,
+      "rl_steps": 14500,
+      "fed_round": 290,
+      "n_clusters": 5,
+      "at_risk_pepm": 1,
+      "rewards": {
+        "min": 220.23,
+        "max": 242.73,
+        "mean": 234.47
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 30,
+      "timestamp_s": 1500.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.720740,
+      "total_energy_consumed_J": 23.963001,
+      "pdr_RL_pct": 99.49,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.26,
+      "rl_steps": 15000,
+      "fed_round": 300,
+      "n_clusters": 5,
+      "at_risk_pepm": 3,
+      "rewards": {
+        "min": 226.79,
+        "max": 250.49,
+        "mean": 242.07
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 31,
+      "timestamp_s": 1550.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.703916,
+      "total_energy_consumed_J": 24.804179,
+      "pdr_RL_pct": 99.49,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.28,
+      "rl_steps": 15500,
+      "fed_round": 310,
+      "n_clusters": 4,
+      "at_risk_pepm": 2,
+      "rewards": {
+        "min": 233.39,
+        "max": 258.20,
+        "mean": 249.59
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 32,
+      "timestamp_s": 1600.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.687406,
+      "total_energy_consumed_J": 25.629695,
+      "pdr_RL_pct": 99.42,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.29,
+      "rl_steps": 16000,
+      "fed_round": 320,
+      "n_clusters": 4,
+      "at_risk_pepm": 4,
+      "rewards": {
+        "min": 239.92,
+        "max": 265.86,
+        "mean": 257.06
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 33,
+      "timestamp_s": 1650.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.669743,
+      "total_energy_consumed_J": 26.512859,
+      "pdr_RL_pct": 99.43,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.34,
+      "rl_steps": 16500,
+      "fed_round": 330,
+      "n_clusters": 5,
+      "at_risk_pepm": 2,
+      "rewards": {
+        "min": 246.21,
+        "max": 273.43,
+        "mean": 264.44
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 34,
+      "timestamp_s": 1700.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.652974,
+      "total_energy_consumed_J": 27.351317,
+      "pdr_RL_pct": 99.45,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.38,
+      "rl_steps": 17000,
+      "fed_round": 340,
+      "n_clusters": 5,
+      "at_risk_pepm": 4,
+      "rewards": {
+        "min": 252.47,
+        "max": 280.98,
+        "mean": 271.76
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 35,
+      "timestamp_s": 1750.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.636926,
+      "total_energy_consumed_J": 28.153696,
+      "pdr_RL_pct": 99.41,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.39,
+      "rl_steps": 17500,
+      "fed_round": 350,
+      "n_clusters": 4,
+      "at_risk_pepm": 3,
+      "rewards": {
+        "min": 258.87,
+        "max": 287.76,
+        "mean": 279.09
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 36,
+      "timestamp_s": 1800.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.621819,
+      "total_energy_consumed_J": 28.909064,
+      "pdr_RL_pct": 99.42,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.39,
+      "rl_steps": 18000,
+      "fed_round": 360,
+      "n_clusters": 4,
+      "at_risk_pepm": 3,
+      "rewards": {
+        "min": 265.23,
+        "max": 294.58,
+        "mean": 286.43
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 37,
+      "timestamp_s": 1850.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.606717,
+      "total_energy_consumed_J": 29.664140,
+      "pdr_RL_pct": 99.44,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.36,
+      "rl_steps": 18500,
+      "fed_round": 370,
+      "n_clusters": 5,
+      "at_risk_pepm": 3,
+      "rewards": {
+        "min": 271.60,
+        "max": 302.19,
+        "mean": 293.81
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 38,
+      "timestamp_s": 1900.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.591866,
+      "total_energy_consumed_J": 30.406703,
+      "pdr_RL_pct": 99.45,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.34,
+      "rl_steps": 19000,
+      "fed_round": 380,
+      "n_clusters": 5,
+      "at_risk_pepm": 4,
+      "rewards": {
+        "min": 277.92,
+        "max": 309.70,
+        "mean": 301.15
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 39,
+      "timestamp_s": 1950.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.573656,
+      "total_energy_consumed_J": 31.317190,
+      "pdr_RL_pct": 99.46,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.39,
+      "rl_steps": 19500,
+      "fed_round": 390,
+      "n_clusters": 4,
+      "at_risk_pepm": 4,
+      "rewards": {
+        "min": 283.85,
+        "max": 316.19,
+        "mean": 308.30
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 40,
+      "timestamp_s": 2000.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.556782,
+      "total_energy_consumed_J": 32.160883,
+      "pdr_RL_pct": 99.43,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.44,
+      "rl_steps": 20000,
+      "fed_round": 400,
+      "n_clusters": 4,
+      "at_risk_pepm": 4,
+      "rewards": {
+        "min": 289.74,
+        "max": 324.15,
+        "mean": 315.39
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 41,
+      "timestamp_s": 2050.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.539739,
+      "total_energy_consumed_J": 33.013069,
+      "pdr_RL_pct": 99.44,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.46,
+      "rl_steps": 20500,
+      "fed_round": 410,
+      "n_clusters": 5,
+      "at_risk_pepm": 6,
+      "rewards": {
+        "min": 295.73,
+        "max": 330.82,
+        "mean": 322.55
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 42,
+      "timestamp_s": 2100.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.523656,
+      "total_energy_consumed_J": 33.817209,
+      "pdr_RL_pct": 99.41,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.49,
+      "rl_steps": 21000,
+      "fed_round": 420,
+      "n_clusters": 5,
+      "at_risk_pepm": 5,
+      "rewards": {
+        "min": 301.67,
+        "max": 338.65,
+        "mean": 329.63
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 43,
+      "timestamp_s": 2150.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.507597,
+      "total_energy_consumed_J": 34.620167,
+      "pdr_RL_pct": 99.42,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.50,
+      "rl_steps": 21500,
+      "fed_round": 430,
+      "n_clusters": 5,
+      "at_risk_pepm": 5,
+      "rewards": {
+        "min": 307.58,
+        "max": 346.48,
+        "mean": 336.74
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 44,
+      "timestamp_s": 2200.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.492804,
+      "total_energy_consumed_J": 35.359807,
+      "pdr_RL_pct": 99.44,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.50,
+      "rl_steps": 22000,
+      "fed_round": 440,
+      "n_clusters": 5,
+      "at_risk_pepm": 4,
+      "rewards": {
+        "min": 313.45,
+        "max": 354.28,
+        "mean": 343.81
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 45,
+      "timestamp_s": 2250.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.475196,
+      "total_energy_consumed_J": 36.240186,
+      "pdr_RL_pct": 99.44,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.55,
+      "rl_steps": 22500,
+      "fed_round": 450,
+      "n_clusters": 4,
+      "at_risk_pepm": 5,
+      "rewards": {
+        "min": 319.17,
+        "max": 361.14,
+        "mean": 350.71
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 46,
+      "timestamp_s": 2300.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.457935,
+      "total_energy_consumed_J": 37.103264,
+      "pdr_RL_pct": 99.46,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.59,
+      "rl_steps": 23000,
+      "fed_round": 460,
+      "n_clusters": 4,
+      "at_risk_pepm": 7,
+      "rewards": {
+        "min": 324.86,
+        "max": 368.90,
+        "mean": 357.56
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 47,
+      "timestamp_s": 2350.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.439104,
+      "total_energy_consumed_J": 38.044778,
+      "pdr_RL_pct": 99.47,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.65,
+      "rl_steps": 23500,
+      "fed_round": 470,
+      "n_clusters": 5,
+      "at_risk_pepm": 8,
+      "rewards": {
+        "min": 330.55,
+        "max": 375.84,
+        "mean": 364.43
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 48,
+      "timestamp_s": 2400.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.422090,
+      "total_energy_consumed_J": 38.895524,
+      "pdr_RL_pct": 99.48,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.69,
+      "rl_steps": 24000,
+      "fed_round": 480,
+      "n_clusters": 5,
+      "at_risk_pepm": 9,
+      "rewards": {
+        "min": 336.19,
+        "max": 383.43,
+        "mean": 371.19
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 49,
+      "timestamp_s": 2450.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.402885,
+      "total_energy_consumed_J": 39.855748,
+      "pdr_RL_pct": 99.49,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.72,
+      "rl_steps": 24500,
+      "fed_round": 490,
+      "n_clusters": 5,
+      "at_risk_pepm": 9,
+      "rewards": {
+        "min": 341.72,
+        "max": 390.04,
+        "mean": 377.91
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 50,
+      "timestamp_s": 2500.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.385438,
+      "total_energy_consumed_J": 40.728080,
+      "pdr_RL_pct": 99.50,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.74,
+      "rl_steps": 25000,
+      "fed_round": 500,
+      "n_clusters": 5,
+      "at_risk_pepm": 14,
+      "rewards": {
+        "min": 347.18,
+        "max": 397.51,
+        "mean": 384.59
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 51,
+      "timestamp_s": 2550.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.368779,
+      "total_energy_consumed_J": 41.561036,
+      "pdr_RL_pct": 99.51,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.78,
+      "rl_steps": 25500,
+      "fed_round": 510,
+      "n_clusters": 5,
+      "at_risk_pepm": 13,
+      "rewards": {
+        "min": 352.64,
+        "max": 403.63,
+        "mean": 391.35
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 52,
+      "timestamp_s": 2600.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.353376,
+      "total_energy_consumed_J": 42.331224,
+      "pdr_RL_pct": 99.51,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.80,
+      "rl_steps": 26000,
+      "fed_round": 520,
+      "n_clusters": 5,
+      "at_risk_pepm": 12,
+      "rewards": {
+        "min": 358.07,
+        "max": 411.12,
+        "mean": 398.05
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 53,
+      "timestamp_s": 2650.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.338139,
+      "total_energy_consumed_J": 43.093067,
+      "pdr_RL_pct": 99.50,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.80,
+      "rl_steps": 26500,
+      "fed_round": 530,
+      "n_clusters": 5,
+      "at_risk_pepm": 10,
+      "rewards": {
+        "min": 363.46,
+        "max": 418.15,
+        "mean": 404.81
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 54,
+      "timestamp_s": 2700.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.323482,
+      "total_energy_consumed_J": 43.825925,
+      "pdr_RL_pct": 99.48,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.80,
+      "rl_steps": 27000,
+      "fed_round": 540,
+      "n_clusters": 5,
+      "at_risk_pepm": 11,
+      "rewards": {
+        "min": 368.82,
+        "max": 425.43,
+        "mean": 411.53
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 55,
+      "timestamp_s": 2750.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.306016,
+      "total_energy_consumed_J": 44.699197,
+      "pdr_RL_pct": 99.49,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.82,
+      "rl_steps": 27500,
+      "fed_round": 550,
+      "n_clusters": 5,
+      "at_risk_pepm": 16,
+      "rewards": {
+        "min": 374.15,
+        "max": 431.95,
+        "mean": 418.12
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 56,
+      "timestamp_s": 2800.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.289874,
+      "total_energy_consumed_J": 45.506280,
+      "pdr_RL_pct": 99.50,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.82,
+      "rl_steps": 28000,
+      "fed_round": 560,
+      "n_clusters": 5,
+      "at_risk_pepm": 16,
+      "rewards": {
+        "min": 379.42,
+        "max": 439.22,
+        "mean": 424.67
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 57,
+      "timestamp_s": 2850.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.271859,
+      "total_energy_consumed_J": 46.407069,
+      "pdr_RL_pct": 99.51,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.81,
+      "rl_steps": 28500,
+      "fed_round": 570,
+      "n_clusters": 4,
+      "at_risk_pepm": 21,
+      "rewards": {
+        "min": 384.62,
+        "max": 446.44,
+        "mean": 431.13
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 58,
+      "timestamp_s": 2900.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.254763,
+      "total_energy_consumed_J": 47.261871,
+      "pdr_RL_pct": 99.51,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.81,
+      "rl_steps": 29000,
+      "fed_round": 580,
+      "n_clusters": 4,
+      "at_risk_pepm": 25,
+      "rewards": {
+        "min": 389.75,
+        "max": 453.55,
+        "mean": 437.52
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 59,
+      "timestamp_s": 2950.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.236678,
+      "total_energy_consumed_J": 48.166106,
+      "pdr_RL_pct": 99.49,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.83,
+      "rl_steps": 29500,
+      "fed_round": 590,
+      "n_clusters": 4,
+      "at_risk_pepm": 23,
+      "rewards": {
+        "min": 394.69,
+        "max": 459.22,
+        "mean": 443.84
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 60,
+      "timestamp_s": 3000.00,
+      "alive_nodes": 50,
+      "dead_nodes": 0,
+      "avg_energy_J": 0.219698,
+      "total_energy_consumed_J": 49.015117,
+      "pdr_RL_pct": 99.50,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.85,
+      "rl_steps": 30000,
+      "fed_round": 600,
+      "n_clusters": 4,
+      "at_risk_pepm": 27,
+      "rewards": {
+        "min": 399.58,
+        "max": 466.26,
+        "mean": 450.16
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 61,
+      "timestamp_s": 3050.00,
+      "alive_nodes": 49,
+      "dead_nodes": 1,
+      "avg_energy_J": 0.206012,
+      "total_energy_consumed_J": 49.905401,
+      "pdr_RL_pct": 99.50,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.88,
+      "rl_steps": 30497,
+      "fed_round": 609,
+      "n_clusters": 5,
+      "at_risk_pepm": 28,
+      "rewards": {
+        "min": 428.59,
+        "max": 473.33,
+        "mean": 457.54
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 62,
+      "timestamp_s": 3100.00,
+      "alive_nodes": 49,
+      "dead_nodes": 1,
+      "avg_energy_J": 0.188182,
+      "total_energy_consumed_J": 50.779068,
+      "pdr_RL_pct": 99.51,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.90,
+      "rl_steps": 30987,
+      "fed_round": 619,
+      "n_clusters": 5,
+      "at_risk_pepm": 29,
+      "rewards": {
+        "min": 434.15,
+        "max": 480.41,
+        "mean": 463.85
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 63,
+      "timestamp_s": 3150.00,
+      "alive_nodes": 48,
+      "dead_nodes": 2,
+      "avg_energy_J": 0.174805,
+      "total_energy_consumed_J": 51.609361,
+      "pdr_RL_pct": 99.51,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.91,
+      "rl_steps": 31477,
+      "fed_round": 629,
+      "n_clusters": 5,
+      "at_risk_pepm": 30,
+      "rewards": {
+        "min": 439.42,
+        "max": 487.34,
+        "mean": 470.59
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 64,
+      "timestamp_s": 3200.00,
+      "alive_nodes": 48,
+      "dead_nodes": 2,
+      "avg_energy_J": 0.158571,
+      "total_energy_consumed_J": 52.388594,
+      "pdr_RL_pct": 99.49,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.92,
+      "rl_steps": 31957,
+      "fed_round": 639,
+      "n_clusters": 5,
+      "at_risk_pepm": 30,
+      "rewards": {
+        "min": 444.66,
+        "max": 494.32,
+        "mean": 476.79
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 65,
+      "timestamp_s": 3250.00,
+      "alive_nodes": 47,
+      "dead_nodes": 3,
+      "avg_energy_J": 0.144736,
+      "total_energy_consumed_J": 53.197409,
+      "pdr_RL_pct": 99.49,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.94,
+      "rl_steps": 32437,
+      "fed_round": 648,
+      "n_clusters": 5,
+      "at_risk_pepm": 31,
+      "rewards": {
+        "min": 449.91,
+        "max": 499.94,
+        "mean": 483.40
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 66,
+      "timestamp_s": 3300.00,
+      "alive_nodes": 47,
+      "dead_nodes": 3,
+      "avg_energy_J": 0.127602,
+      "total_energy_consumed_J": 54.002714,
+      "pdr_RL_pct": 99.49,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.96,
+      "rl_steps": 32907,
+      "fed_round": 658,
+      "n_clusters": 5,
+      "at_risk_pepm": 32,
+      "rewards": {
+        "min": 455.05,
+        "max": 506.93,
+        "mean": 489.54
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 67,
+      "timestamp_s": 3350.00,
+      "alive_nodes": 47,
+      "dead_nodes": 3,
+      "avg_energy_J": 0.112147,
+      "total_energy_consumed_J": 54.729098,
+      "pdr_RL_pct": 99.49,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.96,
+      "rl_steps": 33377,
+      "fed_round": 667,
+      "n_clusters": 5,
+      "at_risk_pepm": 36,
+      "rewards": {
+        "min": 460.23,
+        "max": 512.95,
+        "mean": 495.61
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 68,
+      "timestamp_s": 3400.00,
+      "alive_nodes": 47,
+      "dead_nodes": 3,
+      "avg_energy_J": 0.096742,
+      "total_energy_consumed_J": 55.453135,
+      "pdr_RL_pct": 99.49,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.96,
+      "rl_steps": 33847,
+      "fed_round": 676,
+      "n_clusters": 5,
+      "at_risk_pepm": 32,
+      "rewards": {
+        "min": 465.33,
+        "max": 519.76,
+        "mean": 501.63
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 69,
+      "timestamp_s": 3450.00,
+      "alive_nodes": 45,
+      "dead_nodes": 5,
+      "avg_energy_J": 0.084277,
+      "total_energy_consumed_J": 56.207538,
+      "pdr_RL_pct": 99.48,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.96,
+      "rl_steps": 34310,
+      "fed_round": 686,
+      "n_clusters": 5,
+      "at_risk_pepm": 37,
+      "rewards": {
+        "min": 470.64,
+        "max": 525.66,
+        "mean": 507.67
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    },
+    {
+      "round": 70,
+      "timestamp_s": 3500.00,
+      "alive_nodes": 40,
+      "dead_nodes": 10,
+      "avg_energy_J": 0.077121,
+      "total_energy_consumed_J": 56.915164,
+      "pdr_RL_pct": 99.46,
+      "pdr_NS3_pct": 0.00,
+      "avg_delay_ms": 11.96,
+      "rl_steps": 34740,
+      "fed_round": 694,
+      "n_clusters": 5,
+      "at_risk_pepm": 32,
+      "rewards": {
+        "min": 475.91,
+        "max": 531.31,
+        "mean": 514.79
+      },
+      "q_values": {
+        "min": 0.00,
+        "max": 1.00,
+        "mean": 0.50
+      }
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+# Summary: QRouting
+Metric,Value
+Model,QRouting
+FND_s,1702
+HND_s,2862
+LND_s,0
+PDR_Stable_pct,95.7354
+PDR_Global_pct,94.5215
+AvgDelay_ms,14.7298
+TotalEnergyConsumed_J,355.043
+AvgEnergyGini,0
+TotalPktSent,121237
+TotalPktRecv,114595
+TotalRounds,69

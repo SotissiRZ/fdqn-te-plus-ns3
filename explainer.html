@@ -310,7 +310,7 @@ section {
 .rf-eq .lam { color: #4a8fff; }
 .rf-eq .term { color: #ffd070; }
 .rf-eq .neg { color: #ff8c6a; }
-.rf-terms { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.rf-terms { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
 .rf-term { }
 .rf-term-name { font-size: 14px; color: #4a8fff; margin-bottom: 4px; }
 .rf-term-val { font-size: 18px; font-weight: 700; color: var(--paper); margin-bottom: 2px; }
@@ -418,7 +418,7 @@ footer span { color: #4a8fff; }
         <div class="arch-component" onclick="showDetail('ifo')">
           <span class="arch-badge badge-c">C++</span>
           <div class="arch-component-name">IFO Clustering</div>
-          <div class="arch-component-desc">Sélectionne les 30 meilleurs Cluster Heads par optimisation Fossa. Recalcule toutes les 100s.</div>
+          <div class="arch-component-desc">Sélectionne les Cluster Heads (cible N_CLUSTERS=30, adaptatif) par optimisation Fossa. Recalcule tous les 2 rounds (100s).</div>
         </div>
         <div class="arch-component" onclick="showDetail('network')">
           <span class="arch-badge badge-c">C++</span>
@@ -488,7 +488,7 @@ footer span { color: #4a8fff; }
         <div class="arch-component" onclick="showDetail('reward')">
           <span class="arch-badge badge-py">PY</span>
           <div class="arch-component-name">Calcul Récompense</div>
-          <div class="arch-component-desc">R = λ₁·PDR − λ₂·ΔE − λ₃·d + λ₄·balance. Met à jour la Q-table de l'agent.</div>
+          <div class="arch-component-desc">R = 0.45·PDR + 0.20·E_norm − 0.10·délai − 0.10·risque + 0.15·hier. Met à jour la Q-table.</div>
         </div>
       </div>
     </div>
@@ -546,9 +546,9 @@ footer span { color: #4a8fff; }
         <div class="flow-json">
 {<span class="k">"type"</span>: <span class="s">"action"</span>,
  <span class="k">"node_id"</span>: <span class="v">42</span>,
- <span class="k">"state"</span>: [<span class="v">0.94, 0.72, 0.80, 0.10, 0.23</span>],
+ <span class="k">"state"</span>: [<span class="v">0.94, 0.72, 0.23, 0.87, 0.00, 0.45, 0.88, 1.00, 0.31, 0.10</span>],
  <span class="k">"neighbors"</span>: [<span class="v">17, 83, 105, 201</span>]}
-<span style="color:rgba(10,14,26,0.35)">// état = [E/E0, 1-d/dmax, ETX, Q, σ_PEPM]</span>
+<span style="color:rgba(10,14,26,0.35)">// état = [E/E0, d_sink, σ_PEPM, voisins, isCH, TX, E_vois, frac_vivants, d_CH, recluster] (STATE_DIM=10)</span>
         </div>
       </div>
       <div class="flow-step-recv">
@@ -684,7 +684,7 @@ footer span { color: #4a8fff; }
         <td><strong>Calcul de la récompense</strong><br>R = f(PDR, E, délai)</td>
         <td><span class="tag-both">Les deux</span> Calcul partagé</td>
         <td>NS-3 calcule les composantes réelles (PDR, ΔE mesurée). Python les combine selon la formule RL et met à jour Q.</td>
-        <td><code style="font-size:11px">reward = 0.4·pdr - 0.3·ΔE - 0.2·d + 0.1·bal</code></td>
+        <td><code style="font-size:11px">reward = 0.45·pdr + 0.20·E_norm − 0.10·delay − 0.10·risk + 0.15·hier</code></td>
       </tr>
       <tr>
         <td><strong>Sérialisation JSON</strong><br>encodage/décodage messages</td>
@@ -705,7 +705,7 @@ footer span { color: #4a8fff; }
   <div class="ql-diagram">
     <div class="ql-box">
       <h3>État S</h3>
-      <p>Vecteur de 5 valeurs normalisées [0,1] : énergie, distance, ETX, Q-value, risque PEPM</p>
+      <p>Vecteur de 10 valeurs normalisées [0,1] : énergie, distance sink, risque PEPM, voisins vivants, rôle CH, transmissions, énergie voisins, fraction vivants, distance CH, recluster count</p>
     </div>
     <div class="ql-arrow">→</div>
     <div class="ql-box" style="background:var(--ink);color:var(--paper);">
@@ -722,28 +722,33 @@ footer span { color: #4a8fff; }
   <div class="reward-formula">
     <div class="rf-title">Fonction de Récompense</div>
     <div class="rf-eq">
-      R = <span class="lam">λ₁</span>·<span class="term">PDR</span> &minus; <span class="lam">λ₂</span>·<span class="neg">ΔE</span> &minus; <span class="lam">λ₃</span>·<span class="neg">Délai</span> + <span class="lam">λ₄</span>·<span class="term">Balance</span>
+      R = <span class="lam">λ₁</span>·<span class="term">PDR</span> + <span class="lam">λ₂</span>·<span class="term">E_norm</span> &minus; <span class="lam">λ₃</span>·<span class="neg">Délai</span> &minus; <span class="lam">λ₄</span>·<span class="neg">Risque</span> + <span class="lam">λ₅</span>·<span class="term">Hier</span>
     </div>
     <div class="rf-terms">
       <div class="rf-term">
-        <div class="rf-term-name">λ₁ = 0.4</div>
+        <div class="rf-term-name">λ₁ = 0.45</div>
         <div class="rf-term-val">PDR</div>
-        <div class="rf-term-desc">Fraction de paquets livrés. Récompense si le paquet arrive au sink.</div>
+        <div class="rf-term-desc">Livraison paquet : +1 si livré, −1 si non livré. Terme dominant (objectif cible 99%).</div>
       </div>
       <div class="rf-term">
-        <div class="rf-term-name">λ₂ = 0.3</div>
-        <div class="rf-term-val">−ΔE</div>
-        <div class="rf-term-desc">Pénalise la consommation d'énergie. Moins on consomme, mieux c'est.</div>
+        <div class="rf-term-name">λ₂ = 0.20</div>
+        <div class="rf-term-val">+E_norm</div>
+        <div class="rf-term-desc">Récompense l'énergie résiduelle normalisée. Plus un nœud a d'énergie, plus le routage via lui est valorisé.</div>
       </div>
       <div class="rf-term">
-        <div class="rf-term-name">λ₃ = 0.2</div>
+        <div class="rf-term-name">λ₃ = 0.10</div>
         <div class="rf-term-val">−Délai</div>
-        <div class="rf-term-desc">Pénalise les chemins longs. Favorise les routes directes.</div>
+        <div class="rf-term-desc">Pénalise les chemins longs (distance next hop → sink). Favorise les routes directes.</div>
       </div>
       <div class="rf-term">
-        <div class="rf-term-name">λ₄ = 0.1</div>
-        <div class="rf-term-val">Balance</div>
-        <div class="rf-term-desc">Récompense l'équilibre énergétique entre nœuds. Évite l'épuisement prématuré.</div>
+        <div class="rf-term-name">λ₄ = 0.10</div>
+        <div class="rf-term-val">−Risque</div>
+        <div class="rf-term-desc">Pénalise le score PEPM. Évite les routes via des nœuds proches de l'épuisement.</div>
+      </div>
+      <div class="rf-term">
+        <div class="rf-term-name">λ₅ = 0.15</div>
+        <div class="rf-term-val">+Hier</div>
+        <div class="rf-term-desc">Bonus hiérarchie LEACH : récompense le respect de la structure cluster head / membre.</div>
       </div>
     </div>
   </div>
@@ -757,10 +762,10 @@ footer span { color: #4a8fff; }
     L = (y − Q_online(s, a))²<br>
     θ_online ← θ_online − α · ∇L<br>
     <br>
-    <span style="color:rgba(160,212,255,0.4)"># Mise à jour soft du réseau target</span><br>
-    θ_target ← τ·θ_online + (1−τ)·θ_target<br>
+    <span style="color:rgba(160,212,255,0.4)"># Mise à jour hard du réseau target (toutes les 100 steps)</span><br>
+    if step % 100 == 0: θ_target ← θ_online<br>
     <br>
-    <span style="color:rgba(160,212,255,0.4)"># γ=0.95 (horizon futur), α=0.001 (Adam), τ=0.005</span>
+    <span style="color:rgba(160,212,255,0.4)"># γ=0.99 (horizon futur) | α=3e-4 (Adam LR) | TARGET_UPDATE=100 steps (hard copy)</span>
   </div>
 </section>
 
@@ -794,23 +799,23 @@ footer span { color: #4a8fff; }
 
     <div class="proof-card" data-num="PREUVE 04">
       <div class="proof-icon">🔄</div>
-      <div class="proof-title">710 rondes FedAvg</div>
-      <div class="proof-body">710 agrégations fédérées ont eu lieu. À chaque ronde, les poids des agents sont moyennés et redistribués. Cela prouve que la communication Python interne fonctionne.</div>
-      <div class="proof-metric">Rondes FedAvg : <span>710</span></div>
+      <div class="proof-title">3 195 rondes FedAvg</div>
+      <div class="proof-body">3 195 agrégations fédérées ont eu lieu sur 3 500s (FED_PERIOD=50 steps). À chaque ronde, les poids des agents sont moyennés et redistribués. Cela prouve que la communication Python interne fonctionne sur toute la durée.</div>
+      <div class="proof-metric">Rondes FedAvg : <span>3 195</span></div>
     </div>
 
     <div class="proof-card" data-num="PREUVE 05">
       <div class="proof-icon">📦</div>
-      <div class="proof-title">PDR = 100%</div>
-      <div class="proof-body">1237 paquets envoyés, 1237 reçus. Le routage ADDQN choisit toujours un chemin valide vers le sink. Aucun paquet perdu en 600s de simulation.</div>
-      <div class="proof-metric">PDR : 1237/1237 = <span>100%</span></div>
+      <div class="proof-title">PDR NS-3 = 100% · PDR_RL = 95.7%</div>
+      <div class="proof-body">27 040 paquets NS-3 envoyés, 27 040 reçus (PDR physique = 100%). Au niveau routage RL : 152 931 / 159 753 paquets délivrés (PDR_RL = 95.7%). La phase stable (≤ FND) affiche 99.4%.</div>
+      <div class="proof-metric">PDR NS-3 : 27040/27040 = <span>100%</span> · PDR_RL : <span>95.7%</span></div>
     </div>
 
     <div class="proof-card" data-num="PREUVE 06">
       <div class="proof-icon">⚡</div>
       <div class="proof-title">Énergie équilibrée</div>
-      <div class="proof-body">Écart-type σ = 0.0000 J. Tous les nœuds consomment la même énergie. IFO + FedAvg distribuent la charge uniformément, ce qui est le but principal du système.</div>
-      <div class="proof-metric">σ énergie : <span>≈ 0</span></div>
+      <div class="proof-body">Écart-type inter-nœuds E_std faible jusqu'à t=2000s (phase stable), σ_max = 0.1025J en fin de simulation. IFO + FedAvg distribuent la charge efficacement pendant la phase critique.</div>
+      <div class="proof-metric">E_std max : <span>0.1025 J</span> (fin de sim.)</div>
     </div>
   </div>
 </section>
@@ -819,7 +824,7 @@ footer span { color: #4a8fff; }
 <section id="timeline">
   <div class="section-num">Section 06 — Chronologie d'une Simulation</div>
   <h2 class="section-title">Ce qui se passe<br><em>seconde par seconde</em></h2>
-  <p class="section-lead">Voici la séquence exacte des événements pendant les 600 secondes de simulation.</p>
+  <p class="section-lead">Voici la séquence exacte des événements pendant les 3500 secondes de simulation.</p>
 
   <div class="timeline">
     <div class="tl-event hl">
@@ -830,7 +835,7 @@ footer span { color: #4a8fff; }
     <div class="tl-event">
       <div class="tl-time">t = 1s — CONNEXION</div>
       <div class="tl-title"><span class="tl-badge tb-rl">SOCKET</span> NS-3 se connecte à Python</div>
-      <div class="tl-body">RLBridge ouvre une connexion TCP vers 127.0.0.1:5555. Python confirme. Les 296 agents ADDQN sont instanciés, un par nœud actif.</div>
+      <div class="tl-body">RLBridge ouvre une connexion TCP vers 127.0.0.1:5555. Python confirme. Les agents ADDQN sont instanciés pour les 300 nœuds. RLBridge confirme la connexion.</div>
     </div>
     <div class="tl-event hl">
       <div class="tl-time">t = 2s — PREMIER STEP RL</div>
@@ -914,7 +919,7 @@ footer span { color: #4a8fff; }
       <div class="gloss-def">Variante du Deep Q-Network avec deux réseaux de neurones (online + target) pour éviter la surestimation des Q-values. "Adaptive" = epsilon décroît automatiquement.</div>
     </div>
     <div class="gloss-item">
-      <div class="gloss-term">PEPM — Predictive Energy and Path Metric</div>
+      <div class="gloss-term">PEPM — Predictive Energy Proactive Maintenance</div>
       <div class="gloss-def">LSTM qui prédit si un nœud risque d'épuiser sa batterie. Si σ > 0.7, l'ADDQN évite ce nœud dans ses routes. Prévention proactive des pannes.</div>
     </div>
     <div class="gloss-item">
@@ -927,7 +932,7 @@ footer span { color: #4a8fff; }
     </div>
     <div class="gloss-item">
       <div class="gloss-term">Epsilon (ε) — Exploration vs Exploitation</div>
-      <div class="gloss-def">Au début (ε=0.9), l'agent choisit 90% aléatoirement (exploration). Avec le temps (ε=0.1), il utilise 90% sa Q-table (exploitation). Courbe en décroissance exponentielle.</div>
+      <div class="gloss-def">Au début (ε=0.9), l'agent choisit 90% aléatoirement (exploration). Avec le temps (ε=0.1), il utilise 90% sa Q-table (exploitation). Décroissance linéaire : ε(t+1) = ε(t) − 0.002 (EPSILON_DELTA=0.002).</div>
     </div>
     <div class="gloss-item">
       <div class="gloss-term">PDR — Packet Delivery Ratio</div>
@@ -935,7 +940,7 @@ footer span { color: #4a8fff; }
     </div>
     <div class="gloss-item">
       <div class="gloss-term">FND — First Node Death</div>
-      <div class="gloss-def">Round où le premier nœud épuise sa batterie. Plus FND est élevé, meilleur est le système. Avec E=2J et 600s de simulation, FND=0 car aucun nœud ne meurt.</div>
+      <div class="gloss-def">Round où le premier nœud épuise sa batterie. Plus FND est élevé, meilleur est le système. Avec E=1.2J et 3500s de simulation, FND survient à t=2097s (premier nœud mort).</div>
     </div>
     <div class="gloss-item">
       <div class="gloss-term">Q-value</div>
@@ -946,7 +951,7 @@ footer span { color: #4a8fff; }
 
 <footer>
   <div>FDQN-TE+ · Documentation Architecture · <span>NS-3 + Python RL</span></div>
-  <div>300 nœuds · 30 clusters · <span>35 520 steps</span> · PDR 100%</div>
+  <div>300 nœuds · 23→3 clusters IFO · <span>159 753 steps RL</span> · PDR_NS3 100% · FND 2097s</div>
 </footer>
 
 <!-- ═══════════ SCRIPTS ═══════════ -->
@@ -956,7 +961,7 @@ const details = {
   ifo: {
     title: 'IFO CLUSTERING (C++) — Sélection des Cluster Heads',
     items: [
-      { h: 'Principe', p: 'Chaque nœud calcule sa fitness : F = 0.5×(E/E₀) + 0.3×(1−d/dmax) + 0.2×(1/N_voisins). Les 30 nœuds avec la meilleure fitness deviennent Cluster Heads.' },
+      { h: 'Principe', p: 'Chaque nœud calcule sa fitness : F = 0.5×(E/E₀) + 0.3×(1−d/dmax) + 0.2×(1/N_voisins). Cible N_CLUSTERS=30 CH. En pratique adaptatif : 23 clusters à t=0 (ComputeNClusters ajuste selon la densité). Les nœuds avec la meilleure fitness sont élus CH.' },
       { h: 'Fréquence', p: 'Recalculé toutes les 100s (rounds pairs). Permet d\'adapter les clusters à l\'évolution de l\'énergie résiduelle.' },
       { h: 'Résultat', p: '30 clusters, chaque membre associé au CH le plus proche. Structure hiérarchique pour le routage multi-hop.' }
     ],
@@ -976,7 +981,7 @@ const details = {
     ],
     code: `<span class="cm">// Config énergie NS-3</span>
 BasicEnergySourceHelper energyHelper;
-energyHelper.Set(<span class="str">"BasicEnergySourceInitialEnergyJ"</span>, 
+energyHelper.Set(<span class="str">"BasicEnergySourceInitialEnergyJ"</span>,
                  DoubleValue(p.initEnergy));
 
 WifiRadioEnergyModelHelper radioEnergy;
@@ -986,8 +991,8 @@ radioEnergy.Set(<span class="str">"RxCurrentA"</span>, DoubleValue(<span class="
   addqn: {
     title: 'ADDQN DOUBLE DQN (Python) — L\'Agent Décisionnel',
     items: [
-      { h: 'Architecture', p: 'Réseau neuronal : 5 → 64 → 64 → N_actions. Deux copies (online + target). Replay buffer 10 000 transitions. Batch size 64.' },
-      { h: 'État [5 valeurs]', p: '[E/E₀, 1−d/dmax, ETX, Q_prev, σ_PEPM] : énergie normalisée, distance normalisée, qualité de lien, Q-value précédente, risque PEPM.' },
+      { h: 'Architecture', p: 'Réseau neuronal : 10 → 64 → 64 → N_actions (STATE_DIM=10). Deux copies (online + target). Replay buffer 10 000 transitions. Batch size 64. Target update toutes les 100 steps.' },
+      { h: 'État [10 valeurs]', p: '[E/E₀, d_sink, σ_PEPM, voisins_vivants, isCH, transmissions, E_voisins, frac_vivants, d_CH, recluster_count] — 10 dimensions normalisées (STATE_DIM=10, BuildState()).' },
       { h: 'Action', p: 'Indice du meilleur voisin dans la liste fournie par NS-3. NS-3 convertit cet indice en ID de nœud et route le paquet.' }
     ],
     code: `<span class="kw">class</span> ADDQNAgent:
@@ -1008,7 +1013,7 @@ radioEnergy.Set(<span class="str">"RxCurrentA"</span>, DoubleValue(<span class="
   lstm = LSTM(input=<span class="num">3</span>, hidden=<span class="num">64</span>, layers=<span class="num">2</span>)
   fc   = Linear(<span class="num">64</span>, <span class="num">1</span>)
   sigmoid = Sigmoid()
-  
+
   <span class="kw">def</span> predict_risk(self, energy_history):
     h, _ = self.lstm(energy_history)
     risk = self.sigmoid(self.fc(h[-<span class="num">1</span>]))
@@ -1019,7 +1024,7 @@ radioEnergy.Set(<span class="str">"RxCurrentA"</span>, DoubleValue(<span class="
     items: [
       { h: 'FedAvg', p: 'Toutes les 50 steps : θ_global = Σ(nₖ/n) × θₖ. Chaque agent contribue proportionnellement à sa taille de cluster. Diffusion de θ_global à tous.' },
       { h: 'Méta-adaptation', p: 'MAML-inspired : les agents peuvent s\'adapter rapidement à de nouvelles topologies avec peu de steps. α=0.01 pour la méta-adaptation.' },
-      { h: 'Avantage', p: 'Sans fédération : 296 agents apprennent séparément (lent). Avec fédération : tous partagent leur expérience (710× plus rapide à converger).' }
+      { h: 'Avantage', p: 'Sans fédération : 300 agents apprennent séparément (convergence lente). Avec fédération : tous partagent leur expérience (FED_PERIOD=50 steps, 3 195 rondes en 3 500s).' }
     ],
     code: `<span class="kw">def</span> fed_avg(agent_weights, cluster_sizes):
   total = sum(cluster_sizes)
@@ -1035,15 +1040,16 @@ radioEnergy.Set(<span class="str">"RxCurrentA"</span>, DoubleValue(<span class="
     title: 'CALCUL DE RÉCOMPENSE — Collaboration NS-3 & Python',
     items: [
       { h: 'NS-3 mesure', p: 'ΔE réelle (via EnergySource), délai de livraison (timestamps), PDR instantané (paquets reçus/envoyés).' },
-      { h: 'Python combine', p: 'R = 0.4×PDR − 0.3×ΔE − 0.2×delay + 0.1×balance. Stocké dans replay buffer. Mis à jour dans Q-table.' },
+      { h: 'Python combine', p: 'R = 0.45×PDR + 0.20×E_norm − 0.10×delay − 0.10×risk + 0.15×hier. 5 termes. Stocké dans replay buffer. Mis à jour dans Q-table.' },
       { h: 'Pas de duplication', p: 'NS-3 ne connaît pas la formule R. Python ne connaît pas ΔE réelle. Chacun fait sa partie uniquement.' }
     ],
     code: `<span class="cm"># Python reçoit les composantes de NS-3</span>
-<span class="kw">def</span> compute_reward(pdr, delta_e, delay, balance):
-  R = (  <span class="num">0.4</span> * pdr       <span class="cm"># livraison</span>
-       - <span class="num">0.3</span> * delta_e  <span class="cm"># consommation</span>
-       - <span class="num">0.2</span> * delay    <span class="cm"># latence</span>
-       + <span class="num">0.1</span> * balance  <span class="cm"># équilibre</span>
+<span class="kw">def</span> compute_reward(pdr, e_norm, delay, risk, hier):
+  R = (  <span class="num">0.45</span> * pdr      <span class="cm"># λ1 livraison (dominant)</span>
+       + <span class="num">0.20</span> * e_norm  <span class="cm"># λ2 énergie résiduelle</span>
+       - <span class="num">0.10</span> * delay   <span class="cm"># λ3 latence</span>
+       - <span class="num">0.10</span> * risk    <span class="cm"># λ4 risque PEPM</span>
+       + <span class="num">0.15</span> * hier    <span class="cm"># λ5 bonus hiérarchie</span>
   )
   <span class="kw">return</span> R`
   },
@@ -1072,7 +1078,7 @@ std::string RLBridge::SendRecv(<span class="kw">const</span> std::string& msg) {
     items: [
       { h: 'Rôle', p: 'Écoute sur TCP 5555. Pour chaque message JSON reçu, lit le champ "type" et appelle le bon composant : "pepm" → PEPM, "action" → ADDQN, "reward" → apprentissage.' },
       { h: 'Threading', p: 'Un thread par client NS-3. Actuellement 1 client (1 simulation NS-3). Architecture prête pour plusieurs simulations en parallèle.' },
-      { h: 'Logging', p: 'Affiche [LOG] step=N | agents=296 | ε=0.771 | R=14574 toutes les 100 steps. Preuve visible que les agents apprennent.' }
+      { h: 'Logging', p: 'Affiche [LOG] step=N | agents=300 | ε=... | R=... toutes les 100 steps. En fin de simulation : steps=159753, fed=3195, PDR=95.7%.' }
     ],
     code: `<span class="kw">def</span> dispatch(msg):
   t = msg[<span class="str">"type"</span>]
@@ -1109,9 +1115,9 @@ uint32_t nextHop = g_rlBridge.GetAction(
   nid, state, neighbors);
 
 <span class="cm">// Récompense après observation</span>
-<span class="kw">double</span> reward = <span class="num">0.4</span>*pdr - <span class="num">0.3</span>*deltaE
-               - <span class="num">0.2</span>*delayNorm + <span class="num">0.1</span>*balance;
-g_rlBridge.SubmitReward(nid, actionIdx, 
+<span class="kw">double</span> reward = <span class="num">0.45</span>*pdr + <span class="num">0.20</span>*eNorm
+               - <span class="num">0.10</span>*delayNorm - <span class="num">0.10</span>*pepmRisk + <span class="num">0.15</span>*hier;
+g_rlBridge.SubmitReward(nid, actionIdx,
                          reward, nextState);`
   }
 };
@@ -1150,7 +1156,7 @@ function dInit() {
   for (let i=0; i<DN; i++) {
     dnodes.push({
       id: i, x: rng()*DAREA, y: rng()*DAREA,
-      energy: 2.0, isAlive: true, isCH: false,
+      energy: 1.2, isAlive: true, isCH: false,
       clusterId: 0, clusterIdx: 0, pepmRisk: rng()*0.3,
       nextHop: -1, qval: 0, reward: 0, epsilon: 0.9, steps: 0
     });
@@ -1204,7 +1210,7 @@ function dDraw() {
       dctx.beginPath();dctx.arc(sx,sy,2,0,Math.PI*2);
       dctx.fillStyle='rgba(255,100,100,0.3)';dctx.fill(); return;
     }
-    const color = n.pepmRisk>0.6?'#ff8c6a':(DCH_COLORS[n.clusterIdx%8]);
+    const color = n.pepmRisk>0.7?'#ff8c6a':(DCH_COLORS[n.clusterIdx%8]);
     const r = n.isCH?8:4;
     if(n.isCH){
       const g=dctx.createRadialGradient(sx,sy,0,sx,sy,r+5);
@@ -1272,7 +1278,7 @@ function dStep() {
     n.energy=Math.max(0,n.energy-0.00008*(1+n.distToSink/500));
     if(n.energy<0.001){n.isAlive=false;dLog('WARN',`💀 Nœud #${n.id} épuisé (E→0)`);return;}
     n.pepmRisk=Math.max(0,Math.min(1,(2-n.energy)/2+(Math.random()-0.5)*0.1));
-    n.epsilon=Math.max(0.1,0.9*Math.exp(-0.005*dstep));
+    n.epsilon=Math.max(0.1, 0.9 - 0.002*dstep);  // décroissance linéaire δ=0.002
     const nbs=dnodes.filter(o=>o.id!==n.id&&o.isAlive&&Math.sqrt((o.x-n.x)**2+(o.y-n.y)**2)<=DRADIO);
     if(nbs.length){
       const best=nbs.reduce((b,o)=>o.distToSink<b.distToSink?o:b,nbs[0]);

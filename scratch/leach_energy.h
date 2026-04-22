@@ -12,6 +12,24 @@
  *   2. NS-3 BasicEnergySource : consommation physique WiFi via courants.
  *      Utilisé uniquement pour EnergyCallback (cohérence avec NS-3).
  *
+ * NOTE SUR LE MODÈLE DE DRAIN (important pour la cohérence inter-simulations) :
+ *
+ *   LeachMemberRound / LeachCHRound — défaut = FdqnCfg::DRAIN_BITS (8000 bits) :
+ *
+ *   Ces fonctions sont appelées par :
+ *     • qrouting_sim.cc  : RL_STEP_INTERVAL = FdqnCfg::METRICS_INTERVAL (50s)
+ *                          → 1 paquet complet (8000 bits) par step = CORRECT.
+ *     • fdqn_*.cc        : RL_STEP_INTERVAL = 5s, 1 paquet par step = CORRECT.
+ *       Ces simulations envoient des données à chaque step de contrôle.
+ *       Ce n'est PAS la même chose que le round LEACH (100s de clustering).
+ *
+ *   La correction eval_common.h [FIX-3] (DRAIN_BITS_PER_STEP = 400 bits) s'applique
+ *   UNIQUEMENT à leach_sim.cc via EvalDrainMember/EvalDrainCH. En effet, leach_sim.cc
+ *   exécute leachStep toutes les 5s mais LEACH ne transmet qu'1 paquet par round (100s).
+ *   → leach_sim.cc n'utilise PAS ces fonctions (il utilise EvalDrainCH/EvalDrainMember).
+ *
+ *   En résumé : utiliser FdqnCfg::DRAIN_BITS (défaut) est correct pour tous les appelants.
+ *
  * Placement NS-3 : scratch/
  * ============================================================================= */
 
@@ -80,9 +98,12 @@ inline double CrossoverDist() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Énergie consommée par un MEMBRE en un step RL.
- * @param distToCH   Distance du membre à son CH
- * @param bits       Bits transmis (défaut = DRAIN_BITS)
+ * Énergie consommée par un MEMBRE en un step RL (membre → CH).
+ * @param distToCH   Distance du membre à son CH en mètres
+ * @param bits       Taille du paquet en bits (défaut = FdqnCfg::DRAIN_BITS = 8000)
+ *
+ * Utilisé par qrouting_sim.cc et fdqn_*.cc — 1 paquet complet par step (correct).
+ * leach_sim.cc utilise EvalDrainMember() (eval_common.h) qui applique DRAIN_BITS_PER_STEP.
  */
 inline double LeachMemberRound(double distToCH,
                                uint32_t bits = FdqnCfg::DRAIN_BITS) {
@@ -90,10 +111,13 @@ inline double LeachMemberRound(double distToCH,
 }
 
 /**
- * Énergie consommée par un CH en un step RL.
+ * Énergie consommée par un CH en un step RL (RX membres + agrégation + TX sink).
  * @param nMembers     Nombre de membres dans le cluster
- * @param distToSink   Distance du CH au sink
- * @param bits         Bits par paquet (défaut = DRAIN_BITS)
+ * @param distToSink   Distance du CH au sink en mètres
+ * @param bits         Taille du paquet en bits (défaut = FdqnCfg::DRAIN_BITS = 8000)
+ *
+ * Formule Heinzelman 2002 eq.(5) : E = nMem×E_rx + nMem×E_da + E_tx(sink).
+ * Utilisé par qrouting_sim.cc et fdqn_*.cc — 1 paquet complet par step (correct).
  */
 inline double LeachCHRound(uint32_t nMembers, double distToSink,
                            uint32_t bits = FdqnCfg::DRAIN_BITS) {
