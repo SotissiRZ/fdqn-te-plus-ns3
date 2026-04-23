@@ -7,47 +7,48 @@
 fdqn-te-plus/
 │
 ├── scratch/                          ← Simulations NS-3 (tous les modèles)
+|   ├── fdqn_config.h                 ← Paramètres de configuration du modèle (C++)
 │   ├── eval_config.h                 ← Paramètres communs (N, E_init, RADIO_RANGE…)
 │   ├── eval_common.h                 ← Fonctions partagées (drain, summary, métriques)
 │   ├── leach_energy.h                ← Modèle radio LEACH (Heinzelman 2002)
+│   ├── ifo-clustering.h              ← Interface C++ du clustering IFO
+│   └── ifo-clustering.cc             ← Implémentation des 5 phases IFO
+|   ├── addqn-routing.h               ← Interface C++ du bridge agent ADDQN
 │   │
 │   ├── leach_sim.cc                  ← Baseline 1 : LEACH
 │   ├── heed_sim.cc                   ← Baseline 2 : HEED
 │   ├── qrouting_sim.cc               ← Baseline 3 : Q-Routing tabulaire
-│   ├── fdqn_te_plus_noPEPM.cc       ← Ablation : sans PEPM
-│   ├── fdqn_te_plus_noFed.cc        ← Ablation : sans Fédération
+│   ├── fdqn_te_plus_noPEPM.cc        ← Ablation : sans PEPM
+│   ├── fdqn_te_plus_noFed.cc         ← Ablation : sans Fédération
 │   ├── fdqn_noIFO.cc                 ← Ablation : sans IFO (DQN-LEACH baseline DRL)
-│   ├── fdqn_te_plus_eval.cc         ← FDQN-TE+ complet (évaluation)
+│   ├── fdqn_te_plus.cc               ← FDQN-TE+ complet (évaluation)
 │   │
-│   ├── rl_server_eval.py             ← Serveur FDQN-TE+   (port 5555)
-│   ├── rl_server_nopepm.py           ← Serveur sans PEPM  (port 5556)
-│   ├── rl_server_nofed.py            ← Serveur sans Fed   (port 5557)
-│   ├── rl_server_dqnleach.py         ← Serveur DQN-LEACH  (port 5559)
-│   │
-│   ├── run_multiseed.sh              ← Lance les 7 modèles × 5 seeds
-│   └── aggregate_results.py          ← Agrégation multi-seeds, IC95%, graphes
 │
 ├── model/
-│   ├── ifo/
-│   │   ├── ifo-clustering.h          ← Interface C++ du clustering IFO
-│   │   └── ifo-clustering.cc         ← Implémentation des 5 phases IFO
 │   │
-│   ├── addqn/
-│   │   ├── addqn-routing.h           ← Interface C++ du bridge agent ADDQN
-│   │   └── addqn_agent.py            ← Agent Double DQN (NumPy pur)
+│   ├──   fdqnconfig.py             ← Paramètres de configuration du modèle (Python)
+│   ├──   fedmeta_drl.py            ← Agrégation FedAvg + méta-adaptation
+│   ├──   addqn_agent.py            ← Agent Double DQN (NumPy pur)
+│   ├──   pepm_lstm.py              ← Module LSTM de prédiction énergétique
+│   ├──   rl_server.py              ← Serveur FDQN-TE+   (port 5555)
+│   ├──   rl_server_nopepm.py       ← Serveur sans PEPM  (port 5556)
+│   ├──   rl_server_nofed.py        ← Serveur sans Fed   (port 5557)
+│   ├──   rl_server_dqnleach.py     ← Serveur DQN-LEACH  (port 5559)
+│   ├──   aggregate_results.py      ← Agrégation multi-seeds, IC95%, graphes
+|   ├──   analyze_results.py        ← évaluation de la performance du modèle par rapport aux baselines et abblation, graphes
 │   │
-│   ├── pepm/
-│   │   └── pepm_lstm.py              ← Module LSTM de prédiction énergétique
-│   │
-│   └── federated/
-│       └── fedmeta_drl.py            ← Agrégation FedAvg + méta-adaptation
 │
-├── results/                          ← Sorties de simulation (auto-créé)
-│   ├── fdqnte_stats.csv
-│   ├── flow_monitor.xml
-│   └── fdqnte_animation.xml
+├── results/                        ← Sorties de simulation du modèl fdqn_te_plus
+├── results_eval/                   ← Sorties de simulation pour l'évaluation
+├── fdqn_dashboard/                 ← interface react permetant de charger les fichier de sortie du modèle pour mieu visualiser les résultats
 │
-└── CMakeLists.txt                    ← Configuration de build NS-3
+└── CMakeLists.txt                  ← Configuration de build NS-3
+├── run_fdqn-te_plus.py             ← Lance l'exécution du modèle ( server et simulateur fdqnte+)
+├── run_multiseed.sh                ← Lance les 7 modèles × 5 seeds
+├── run_scalability.sh              ← lance les modèle pour nNodes=50,100,200, 300
+├── plot_fdqn_metrics.py            ← construit les graphes du modèle fdqn_te_plus
+├── explainer.html                  ← explique en détails le fonctionnement du modèle fdqn_te_plus
+
 ```
 
 ---
@@ -120,10 +121,10 @@ cd ~/ns-allinone-3.39/ns-3.39
 cd ~/ns-allinone-3.39/ns-3.39
 
 # Démarrer le serveur RL
-python3 scratch/rl_server_eval.py &
+python3 scratch/rl_server.py &
 
 # Lancer la simulation
-./ns3 run "scratch/fdqn_te_plus_eval \
+./ns3 run "scratch/fdqn_te_plus \
   --nNodes=300 --seed=42 \
   --resultsDir=results_eval/FDQN_TEplus/seed_42"
 
