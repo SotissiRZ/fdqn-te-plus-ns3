@@ -440,6 +440,18 @@ export default function FDQNDashboard() {
   /* ── Données reward depuis RL history ── */
   const rewardData = useMemo(() => rlRows.map(r => ({ time: r.time, mean: r.rewardMean, min: r.rewardMin, max: r.rewardMax, atRisk: r.atRisk })), [rlRows]);
 
+  /* ── Drain par round depuis energy CSV (complet : TX+RX+idle+circuit) ── */
+  const drainPerRound = useMemo(() => rows.map((r, i) => ({
+    time:      r.time,
+    drain_mJ:  +(((i === 0 ? r.drained : r.drained - rows[i - 1].drained) * 1000).toFixed(2)),
+    alive:     r.alive,
+    nClusters: r.nClusters,
+    pdrRL:     r.pdrRL,
+    delay:     r.delay,
+    pepmMean:  r.pepmMean,
+    atRisk:    r.atRisk,
+  })), [rows]);
+
   const TABS = [
     { id: "energy", label: "Énergie & Durée de vie" },
     { id: "pdr", label: "PDR & Délai" },
@@ -1242,8 +1254,8 @@ export default function FDQNDashboard() {
                 {/* Bandeau explicatif PDR */}
                 <div style={{ background:`${C.amber}08`, border:`1px solid ${C.amber}30`, borderRadius:6, padding:"8px 12px", fontSize:9, color:C.dim, lineHeight:1.8 }}>
                   <span style={{color:C.amber,fontWeight:700}}>⚠ Deux PDR différents dans ce dashboard :</span><br/>
-                  <span style={{color:C.green}}>■ PDR hop-à-hop (CSV routing)</span> = paquet reçu par le <strong style={{color:C.txt}}>voisin direct</strong> — 99.98% ici (25 pertes sur 158k)<br/>
-                  <span style={{color:pdrColor}}>■ PDR E2E Sink ★ (NS-3 FlowMonitor)</span> = paquet arrivé au <strong style={{color:C.txt}}>Sink/BS</strong> — 99.3% pré-FND · 95.8% final (6 587 pertes)
+                  <span style={{color:C.green}}>■ PDR hop-à-hop (CSV routing)</span> = paquet reçu par le <strong style={{color:C.txt}}>voisin direct</strong> — {routing.summary.pdrGlobal}% ici ({routing.summary.nonDelivered} pertes sur {routing.summary.totalPackets.toLocaleString()})<br/>
+                  <span style={{color:pdrColor}}>■ PDR E2E Sink ★ (NS-3 FlowMonitor)</span> = paquet arrivé au <strong style={{color:C.txt}}>Sink/BS</strong> — {pdrPreFND ? `${pdrPreFND.toFixed(1)}%` : "—"} pré-FND · {pdrFinal ? `${pdrFinal.toFixed(1)}%` : "—"} final ({summary?.RL_PktEmitted && summary?.RL_PktDelivered ? (summary.RL_PktEmitted - summary.RL_PktDelivered).toLocaleString() : "—"} pertes)
                 </div>
 
                 {/* KPIs routing */}
@@ -1253,8 +1265,8 @@ export default function FDQNDashboard() {
                     ["Livrés (1er saut)",   routing.summary.delivered.toLocaleString(),           C.green,                                                              `${routing.summary.pdrGlobal}% hop-à-hop`],
                     ["Non livrés (1er saut)", routing.summary.nonDelivered,                       routing.summary.nonDelivered > 0 ? C.red : C.green,                   "échec hop local"],
                     ["PDR E2E pré-FND ★",   pdrPreFND ? `${pdrPreFND.toFixed(1)}%` : `${routing.summary.pdrGlobal}%`, pdrColor,                                       "Sink · phase stable"],
-                    ["E drain moy",          `${(routing.summary.drainMoy*1000).toFixed(2)}mJ`,   C.amber,                                                              "par nœud total"],
-                    ["Nœuds actifs",         routing.summary.nNodes,                               C.purple,                                                             `${routing.summary.nCHActive} CH`],
+                    ["E drain TX moy",      `${(routing.summary.drainMoy*1000).toFixed(1)}mJ`,   C.amber,                                                              "par nœud · TX seult"],
+                    ["CH max par round",    routing.summary.nCHActive,                             C.purple,                                                             `${routing.summary.nNodes} nœuds actifs`],
                   ].map(([l, v, c, sub]) => (
                     <div key={l} style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8,
                       padding: "10px 13px", position: "relative", overflow: "hidden" }}>
@@ -1266,24 +1278,26 @@ export default function FDQNDashboard() {
                   ))}
                 </div>
 
-                {/* Ligne 1: PDR temporel + Paquets/drain */}
+                {/* Ligne 1: PDR E2E (energy) + Drain total réseau (energy) */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                   <Panel>
-                    <Title accent={C.cyan}>PDR logique RL (%) — évolution temporelle</Title>
+                    <Title accent={C.cyan}>PDR E2E RL (%) — évolution par round</Title>
                     <div style={{ fontSize: 8, color: C.dim, marginBottom: 6 }}>
-                      Taux de livraison par round · <span style={{ color: C.green }}>100% jusqu'à FND</span> puis décroît avec les morts de CH
+                      Source : <span style={{ color: C.cyan }}>fdqnte_energy.csv · PDR_RL_pct</span> — livraison jusqu'au <strong style={{ color: C.txt }}>Sink (BS)</strong> · cumul FlowMonitor NS-3
                     </div>
                     <ResponsiveContainer width="100%" height={200}>
-                      <ComposedChart data={routing.timeSeries}>
+                      <ComposedChart data={drainPerRound}>
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                         <XAxis dataKey="time" stroke={C.dim} tick={{ fontSize: 8 }} label={{ value: "t (s)", position: "insideRight", fill: C.dim, fontSize: 8 }} />
-                        <YAxis yAxisId="l" stroke={C.dim} tick={{ fontSize: 8 }} domain={[98, 101]} />
+                        <YAxis yAxisId="l" stroke={C.dim} tick={{ fontSize: 8 }} domain={[94, 101]} tickFormatter={v => `${v}%`} />
                         <YAxis yAxisId="r" orientation="right" stroke={C.dim} tick={{ fontSize: 8 }} />
-                        <Tooltip {...tt} formatter={(v, n) => [typeof v === "number" ? (n === "PDR%" ? `${v.toFixed(2)}%` : v.toLocaleString()) : v, n]} />
+                        <Tooltip {...tt} formatter={(v, n) => [n === "PDR E2E" ? `${v.toFixed(2)}%` : v, n]} />
                         <Legend wrapperStyle={{ fontSize: 8, color: C.dim }} />
-                        <Line yAxisId="l" type="monotone" dataKey="pdr"     name="PDR%"     stroke={C.cyan}  strokeWidth={2} dot={false} />
-                        <Area yAxisId="r" type="monotone" dataKey="packets" name="Paquets"  stroke={C.green} strokeWidth={1} fill={`${C.green}10`} dot={false} />
+                        <Line yAxisId="l" type="monotone" dataKey="pdrRL"  name="PDR E2E"      stroke={C.cyan}   strokeWidth={2} dot={false} />
+                        <Area yAxisId="r" type="monotone" dataKey="alive"  name="Nœuds vivants" stroke={C.green} strokeWidth={1} fill={`${C.green}10`} dot={false} />
+                        {pdrPreFND > 0 && <ReferenceLine yAxisId="l" y={pdrPreFND} stroke={pdrColor} strokeDasharray="5 2" label={{ value: `pré-FND ${pdrPreFND.toFixed(1)}%`, fill: pdrColor, fontSize: 7, position: "right" }} />}
                         {fndT > 0 && <ReferenceLine yAxisId="l" x={fndT} stroke={C.amber} strokeDasharray="5 3" label={{ value: "FND", fill: C.amber, fontSize: 8 }} />}
+                        {hndT > 0 && <ReferenceLine yAxisId="l" x={hndT} stroke={C.red} strokeDasharray="5 3" label={{ value: "HND", fill: C.red, fontSize: 8 }} />}
                       </ComposedChart>
                     </ResponsiveContainer>
                   </Panel>
@@ -1291,53 +1305,53 @@ export default function FDQNDashboard() {
                   <Panel>
                     <Title accent={C.amber}>Énergie drainée par round (mJ total réseau)</Title>
                     <div style={{ fontSize: 8, color: C.dim, marginBottom: 6 }}>
-                      Drain cumulatif de tous les nœuds · décroît après FND car moins de nœuds actifs
+                      Source : <span style={{ color: C.amber }}>fdqnte_energy.csv · TotalDrained_J</span> — drain <strong style={{ color: C.txt }}>complet</strong> (TX+RX+idle) · décroît après FND
                     </div>
                     <ResponsiveContainer width="100%" height={200}>
-                      <ComposedChart data={routing.timeSeries}>
+                      <ComposedChart data={drainPerRound}>
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                         <XAxis dataKey="time" stroke={C.dim} tick={{ fontSize: 8 }} />
-                        <YAxis yAxisId="l" stroke={C.dim} tick={{ fontSize: 8 }} tickFormatter={v => `${(v/1000).toFixed(1)}J`} />
+                        <YAxis yAxisId="l" stroke={C.dim} tick={{ fontSize: 8 }} tickFormatter={v => `${(v / 1000).toFixed(1)}J`} />
                         <YAxis yAxisId="r" orientation="right" stroke={C.dim} tick={{ fontSize: 8 }} />
                         <Tooltip {...tt} formatter={(v, n) => [n === "Drain (mJ)" ? `${v.toFixed(1)} mJ` : v, n]} />
                         <Legend wrapperStyle={{ fontSize: 8, color: C.dim }} />
-                        <Area yAxisId="l" type="monotone" dataKey="drain_mJ" name="Drain (mJ)" stroke={C.amber} strokeWidth={2} fill={`${C.amber}20`} />
-                        <Line yAxisId="r" type="monotone" dataKey="nSrc"     name="Nœuds actifs" stroke={C.purple} strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
+                        <Area yAxisId="l" type="monotone" dataKey="drain_mJ"   name="Drain (mJ)"    stroke={C.amber}  strokeWidth={2} fill={`${C.amber}20`} />
+                        <Line yAxisId="r" type="monotone" dataKey="nClusters"  name="Nœuds actifs"  stroke={C.purple} strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
                         {fndT > 0 && <ReferenceLine yAxisId="l" x={fndT} stroke={C.amber} strokeDasharray="5 3" label={{ value: "FND", fill: C.amber, fontSize: 8 }} />}
                       </ComposedChart>
                     </ResponsiveContainer>
                   </Panel>
                 </div>
 
-                {/* Ligne 2: CH actifs + PEPM */}
+                {/* Ligne 2: CH actifs (routing — correct) + PEPM (energy — correct) */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                   <Panel>
                     <Title accent={C.purple}>CH actifs & Nœuds sources par round</Title>
                     <div style={{ fontSize: 8, color: C.dim, marginBottom: 6 }}>
-                      Corrélation entre mort des CH et réduction du trafic
+                      Source : <span style={{ color: C.purple }}>fdqnte_routing.csv</span> — CH = nœuds uniques ayant transmis en tant que CH dans le round
                     </div>
                     <ResponsiveContainer width="100%" height={195}>
                       <ComposedChart data={routing.timeSeries}>
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                         <XAxis dataKey="time" stroke={C.dim} tick={{ fontSize: 8 }} />
-                        <YAxis yAxisId="l" stroke={C.dim} tick={{ fontSize: 8 }} label={{ value: "CH", angle: -90, position: "insideLeft", fill: C.dim, fontSize: 8 }} domain={[0, 30]} />
+                        <YAxis yAxisId="l" stroke={C.dim} tick={{ fontSize: 8 }} label={{ value: "CH", angle: -90, position: "insideLeft", fill: C.dim, fontSize: 8 }} domain={[0, "auto"]} />
                         <YAxis yAxisId="r" orientation="right" stroke={C.dim} tick={{ fontSize: 8 }} label={{ value: "Sources", angle: 90, position: "insideRight", fill: C.dim, fontSize: 8 }} />
                         <Tooltip {...tt} />
                         <Legend wrapperStyle={{ fontSize: 8, color: C.dim }} />
-                        <Bar  yAxisId="l" dataKey="nCH"  name="CH actifs"     fill={C.cyan}   fillOpacity={0.7} radius={[2,2,0,0]} />
-                        <Line yAxisId="r" dataKey="nSrc"  name="Nœuds sources" stroke={C.green} strokeWidth={2} dot={false} />
+                        <Bar  yAxisId="l" dataKey="nCH"  name="CH actifs"      fill={C.cyan}   fillOpacity={0.7} radius={[2, 2, 0, 0]} />
+                        <Line yAxisId="r" dataKey="nSrc" name="Nœuds sources"  stroke={C.green} strokeWidth={2} dot={false} />
                         {fndT > 0 && <ReferenceLine yAxisId="l" x={fndT} stroke={C.amber} strokeDasharray="5 3" label={{ value: "FND", fill: C.amber, fontSize: 8 }} />}
                       </ComposedChart>
                     </ResponsiveContainer>
                   </Panel>
 
                   <Panel>
-                    <Title accent={C.red}>Risque PEPM moyen (routage) — évolution</Title>
+                    <Title accent={C.red}>Risque PEPM moyen — évolution par round</Title>
                     <div style={{ fontSize: 8, color: C.dim, marginBottom: 6 }}>
-                      PEPM risk moyen des nœuds en transmission · monte progressivement avec l'épuisement
+                      Source : <span style={{ color: C.red }}>fdqnte_energy.csv · PEPMRiskMean</span> — risque moyen sur <strong style={{ color: C.txt }}>tous les nœuds</strong>, calculé par le serveur RL
                     </div>
                     <ResponsiveContainer width="100%" height={195}>
-                      <AreaChart data={routing.timeSeries}>
+                      <ComposedChart data={drainPerRound}>
                         <defs>
                           <linearGradient id="prg" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%"  stopColor={C.red} stopOpacity={0.35} />
@@ -1346,12 +1360,15 @@ export default function FDQNDashboard() {
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                         <XAxis dataKey="time" stroke={C.dim} tick={{ fontSize: 8 }} />
-                        <YAxis stroke={C.dim} tick={{ fontSize: 8 }} domain={[0.2, 0.75]} tickFormatter={v => `${(v*100).toFixed(0)}%`} />
-                        <Tooltip {...tt} formatter={v => [`${(v*100).toFixed(1)}%`, "PEPM risk moy"]} />
-                        <Area type="monotone" dataKey="pepm" name="PEPM moy" stroke={C.red} strokeWidth={2} fill="url(#prg)" />
-                        <ReferenceLine y={0.7} stroke={C.red} strokeDasharray="4 2" label={{ value: "seuil 70%", fill: C.red, fontSize: 8 }} />
-                        {fndT > 0 && <ReferenceLine x={fndT} stroke={C.amber} strokeDasharray="5 3" label={{ value: "FND", fill: C.amber, fontSize: 8 }} />}
-                      </AreaChart>
+                        <YAxis yAxisId="l" stroke={C.dim} tick={{ fontSize: 8 }} domain={[0, 1]} tickFormatter={v => `${(v * 100).toFixed(0)}%`} />
+                        <YAxis yAxisId="r" orientation="right" stroke={C.dim} tick={{ fontSize: 8 }} />
+                        <Tooltip {...tt} formatter={(v, n) => [n === "PEPM moy" ? `${(v * 100).toFixed(1)}%` : v, n]} />
+                        <Legend wrapperStyle={{ fontSize: 8, color: C.dim }} />
+                        <Area yAxisId="l" type="monotone" dataKey="pepmMean" name="PEPM moy"    stroke={C.red}   strokeWidth={2} fill="url(#prg)" />
+                        <Line yAxisId="r" type="monotone" dataKey="atRisk"   name="@risque (n)" stroke={C.amber} strokeWidth={1.5} dot={false} />
+                        <ReferenceLine yAxisId="l" y={0.5} stroke={C.red} strokeDasharray="4 2" label={{ value: "seuil 50%", fill: C.red, fontSize: 7, position: "insideTopRight" }} />
+                        {fndT > 0 && <ReferenceLine yAxisId="l" x={fndT} stroke={C.amber} strokeDasharray="5 3" label={{ value: "FND", fill: C.amber, fontSize: 8 }} />}
+                      </ComposedChart>
                     </ResponsiveContainer>
                   </Panel>
                 </div>

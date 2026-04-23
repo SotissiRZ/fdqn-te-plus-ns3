@@ -331,7 +331,7 @@ export function parseRouting(txt) {
       drainMoy:     +(dv.reduce((s,v)=>s+v,0)/dv.length).toFixed(4),
       timeRange:    `${rows[0]?.time}s → ${rows[rows.length-1]?.time}s`,
       nNodes:       nodeList.length,
-      nCHActive:    nodeList.filter(n => n.isCH).length,
+      nCHActive:    timeSeries.length > 0 ? Math.max(...timeSeries.map(b => b.nCH)) : 0,
     },
   };
 }
