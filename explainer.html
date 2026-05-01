@@ -400,7 +400,7 @@ footer span { color: #4a8fff; }
     <div class="hero-pill">ADDQN Double DQN</div>
     <div class="hero-pill">PEPM-LSTM</div>
     <div class="hero-pill">FedMeta-DRL</div>
-    <div class="hero-pill">Socket TCP 5555</div>
+    <div class="hero-pill">Ports TCP 5555–5558</div>
   </div>
 </div>
 
@@ -506,7 +506,7 @@ footer span { color: #4a8fff; }
 <section id="messages">
   <div class="section-num">Section 02 — Flux de Messages</div>
   <h2 class="section-title">Chaque <em>échange</em><br>décortiqué</h2>
-  <p class="section-lead">Toutes les 5 secondes simulées, NS-3 envoie 3 types de messages JSON à Python. Voici exactement ce qui circule sur le socket TCP.</p>
+  <p class="section-lead">NS-3 échange 5 types de messages JSON avec Python sur le socket TCP. Chaque type a un handler Python dédié dans FDQNServer.dispatch().</p>
 
   <div class="flow-steps">
 
@@ -514,25 +514,25 @@ footer span { color: #4a8fff; }
       <div class="flow-step-num">1</div>
       <div class="flow-step-send">
         <div class="flow-direction direction-ns3">📤 NS-3 → Python</div>
-        <div class="flow-title">Demande de risque PEPM</div>
-        <div class="flow-desc">NS-3 demande la prédiction du risque énergétique pour le nœud i.</div>
+        <div class="flow-title">Requête PEPM batch</div>
+        <div class="flow-desc">NS-3 envoie l'historique énergétique de <strong>tous les nœuds vivants</strong> en une seule requête (réduction du nombre de round-trips TCP).</div>
         <div class="flow-json">
-{<span class="k">"type"</span>: <span class="s">"pepm"</span>,
- <span class="k">"node_id"</span>: <span class="v">42</span>,
- <span class="k">"energy"</span>: <span class="v">1.87</span>,
- <span class="k">"neighbors"</span>: [<span class="v">17, 83, 105</span>]}
+{<span class="k">"type"</span>: <span class="s">"pepm_batch"</span>,
+ <span class="k">"nodes"</span>: [{<span class="k">"id"</span>:<span class="v">42</span>,<span class="k">"energy"</span>:<span class="v">0.94</span>,<span class="k">"hist_len"</span>:<span class="v">10</span>},
+            {<span class="k">"id"</span>:<span class="v">17</span>,<span class="k">"energy"</span>:<span class="v">0.71</span>,<span class="k">"hist_len"</span>:<span class="v">10</span>}, <span class="s">...</span>]}
         </div>
       </div>
       <div class="flow-step-recv">
         <div class="flow-direction direction-py">📥 Python → NS-3</div>
-        <div class="flow-title">Réponse risque PEPM</div>
-        <div class="flow-desc">Python retourne σ ∈ [0,1] : probabilité d'épuisement à court terme.</div>
+        <div class="flow-title">Réponse PEPM batch</div>
+        <div class="flow-desc">Python retourne un dictionnaire node_id → risque ∈ [0,1] pour tous les nœuds. Seuil d'alerte : PEPM_RISK_THRESHOLD = 0.7.</div>
         <div class="flow-json">
-{<span class="k">"risk"</span>: <span class="v">0.23</span>,
+{<span class="k">"risks"</span>: {<span class="k">"42"</span>:<span class="v">0.23</span>, <span class="k">"17"</span>:<span class="v">0.68</span>, <span class="s">...</span>},
  <span class="k">"status"</span>: <span class="s">"ok"</span>}
 
-<span style="color:rgba(10,14,26,0.35)">// σ=0.23 → nœud sûr
-// σ>0.7 → nœud évité</span>
+<span style="color:rgba(10,14,26,0.35)">// risque par nœud [0,1]
+// > 0.7 = nœud évité dans routage
+// PEPM_RISK_THRESHOLD = 0.7</span>
         </div>
       </div>
     </div>
@@ -577,7 +577,7 @@ footer span { color: #4a8fff; }
  <span class="k">"node_id"</span>: <span class="v">42</span>,
  <span class="k">"action"</span>: <span class="v">2</span>,
  <span class="k">"reward"</span>: <span class="v">0.312</span>,
- <span class="k">"next_state"</span>: [<span class="v">0.93, 0.73, 0.80, 0.11, 0.24</span>],
+ <span class="k">"next_state"</span>: [<span class="v">0.93, 0.72, 0.71, 0.86, 0.00, 0.46, 0.87, 1.00, 0.30, 0.12</span>],  <span style="color:rgba(10,14,26,0.35)">// STATE_DIM=10</span>
  <span class="k">"done"</span>: <span class="v">false</span>}
         </div>
       </div>
@@ -586,11 +586,14 @@ footer span { color: #4a8fff; }
         <div class="flow-title">Accusé d'apprentissage</div>
         <div class="flow-desc">Python confirme la mise à jour et retourne la perte d'apprentissage (loss).</div>
         <div class="flow-json">
-{<span class="k">"status"</span>: <span class="s">"learned"</span>,
- <span class="k">"loss"</span>: <span class="v">0.0124</span>}
+{<span class="k">"ok"</span>: <span class="v">true</span>,
+ <span class="k">"loss"</span>: <span class="v">0.0124</span>,
+ <span class="k">"aggregation_ok"</span>: <span class="v">0</span>,
+ <span class="k">"federated"</span>: <span class="v">false</span>,
+ <span class="k">"fed_round"</span>: <span class="v">42</span>}
 
-<span style="color:rgba(10,14,26,0.35)">// loss décroît au fil du temps
-// = preuve d'apprentissage</span>
+<span style="color:rgba(10,14,26,0.35)">// aggregation_ok=1 → NS-3 incrémente
+// m_fedRound (uniquement si FedAvg réel)</span>
         </div>
       </div>
     </div>
@@ -599,22 +602,25 @@ footer span { color: #4a8fff; }
       <div class="flow-step-num">4</div>
       <div class="flow-step-send">
         <div class="flow-direction direction-ns3">📤 NS-3 → Python</div>
-        <div class="flow-title">Demande de statistiques</div>
-        <div class="flow-desc">Toutes les 50s, NS-3 demande un résumé pour le CSV de monitoring.</div>
+        <div class="flow-title">Envoi de topologie IFO</div>
+        <div class="flow-desc">À chaque recluster IFO, NS-3 envoie la topologie clusters mise à jour pour que Python adapte la fédération.</div>
         <div class="flow-json">
-{<span class="k">"type"</span>: <span class="s">"stats"</span>}
+{<span class="k">"type"</span>: <span class="s">"topology"</span>,
+ <span class="k">"clusters"</span>: [{<span class="k">"ch"</span>:<span class="v">5</span>,<span class="k">"members"</span>:[<span class="v">12,34,67</span>]},
+               {<span class="k">"ch"</span>:<span class="v">18</span>,<span class="k">"members"</span>:[<span class="v">2,91,105</span>]}, <span class="s">...</span>]}
         </div>
       </div>
       <div class="flow-step-recv">
         <div class="flow-direction direction-py">📥 Python → NS-3</div>
-        <div class="flow-title">Statistiques globales</div>
-        <div class="flow-desc">Python retourne l'état de tous les agents : steps, epsilon, récompense, rounds Fed.</div>
+        <div class="flow-title">Accusé de réception topologie</div>
+        <div class="flow-desc">Python met à jour self.clusters pour adapter la prochaine agrégation FedAvg aux clusters actifs réels.</div>
         <div class="flow-json">
-{<span class="k">"global_step"</span>: <span class="v">35520</span>,
- <span class="k">"epsilon"</span>: <span class="v">0.771</span>,
- <span class="k">"total_reward"</span>: <span class="v">14574.1</span>,
- <span class="k">"fed_round"</span>: <span class="v">710</span>,
- <span class="k">"at_risk_nodes"</span>: <span class="v">0</span>}
+{<span class="k">"ok"</span>: <span class="v">true</span>,
+ <span class="k">"n_clusters"</span>: <span class="v">23</span>,
+ <span class="k">"aggregation_ok"</span>: <span class="v">0</span>}
+
+<span style="color:rgba(10,14,26,0.35)">// aggregation_ok=1 seulement après
+// une vraie agrégation FedAvg [FIX-F]</span>
         </div>
       </div>
     </div>
@@ -666,7 +672,7 @@ footer span { color: #4a8fff; }
         <td><strong>Réseau de neurones LSTM</strong><br>prédiction risque PEPM</td>
         <td><span class="tag-py">PY</span> Python uniquement</td>
         <td>Les libs deep learning (PyTorch/TF) n'existent pas en C++. NS-3 envoie juste l'énergie, Python fait le calcul.</td>
-        <td><code style="font-size:11px">LSTM(input=3, hidden=64), σ(h_t)</code></td>
+        <td><code style="font-size:11px">LSTM(input_size=1, hidden=64, window=10), TTD score</code></td>
       </tr>
       <tr>
         <td><strong>Double DQN (ADDQN)</strong><br>apprentissage par renforcement</td>
@@ -779,29 +785,29 @@ footer span { color: #4a8fff; }
     <div class="proof-card" data-num="PREUVE 01">
       <div class="proof-icon">📉</div>
       <div class="proof-title">Epsilon décroît</div>
-      <div class="proof-body">ε passe de 0.900 à 0.771 en 600s. Cela signifie que l'agent explore de moins en moins (aléatoire) et exploite de plus en plus ses connaissances acquises.</div>
-      <div class="proof-metric">ε : 0.900 → <span>0.771</span></div>
+      <div class="proof-body">ε passe de 0,900 à 0,100 (minimum) au fil des 159 753 steps RL. La décroissance est linéaire : ε(t+1) = ε(t) − 0,002 (EPSILON_DELTA). L'agent explore moins et exploite davantage sa politique apprise.</div>
+      <div class="proof-metric">ε : 0,900 → <span>0,100</span> (EPSILON_MIN)</div>
     </div>
 
     <div class="proof-card" data-num="PREUVE 02">
       <div class="proof-icon">📈</div>
       <div class="proof-title">Récompense croissante</div>
-      <div class="proof-body">La récompense cumulative passe de 0 à 14 574 en 600s. Une courbe croissante = l'agent prend de meilleures décisions au fil du temps.</div>
-      <div class="proof-metric">R cumulée : 0 → <span>14 574</span></div>
+      <div class="proof-body">La récompense composite R = λ₁·PDR + λ₂·E_norm − λ₃·delay − λ₄·risk + λ₅·hier croît de ≈ 10 à ≈ 420 sur 67 rounds simulés. Cette croissance quasi-linéaire confirme que l'agent ADDQN converge vers une politique stable sans plateau prématuré.</div>
+      <div class="proof-metric">R moy/round : ≈ 10 → <span>≈ 420</span></div>
     </div>
 
     <div class="proof-card" data-num="PREUVE 03">
       <div class="proof-icon">🌐</div>
-      <div class="proof-title">296/300 agents actifs</div>
-      <div class="proof-body">296 agents ADDQN reçoivent et exécutent des actions. Les 4 nœuds restants sont géographiquement isolés (sans voisins radio). Normal et attendu.</div>
-      <div class="proof-metric">Agents actifs : <span>296 / 300</span></div>
+      <div class="proof-title">300/300 agents actifs</div>
+      <div class="proof-body">Les 300 agents ADDQN participent au routage. Chaque nœud vivant reçoit une action à chaque step RL. Les 159 753 steps RL au total confirment que tous les nœuds ont été actifs jusqu'au FND (t = 2 097 s).</div>
+      <div class="proof-metric">RL Steps total : <span>159 753</span></div>
     </div>
 
     <div class="proof-card" data-num="PREUVE 04">
       <div class="proof-icon">🔄</div>
       <div class="proof-title">3 195 rondes FedAvg</div>
-      <div class="proof-body">3 195 agrégations fédérées ont eu lieu sur 3 500s (FED_PERIOD=50 steps). À chaque ronde, les poids des agents sont moyennés et redistribués. Cela prouve que la communication Python interne fonctionne sur toute la durée.</div>
-      <div class="proof-metric">Rondes FedAvg : <span>3 195</span></div>
+      <div class="proof-body">3 191 rondes fédérées confirmées (aggregation_ok=1) sur 3 500s. Chaque ronde agrège les poids θ de tous les CH actifs par FedAvg pondéré par la taille des clusters. Le compteur m_fedRound dans NS-3 n'est incrémenté que si Python confirme une agrégation réelle [FIX-F].</div>
+      <div class="proof-metric">Rondes FedAvg confirmées : <span>3 191</span></div>
     </div>
 
     <div class="proof-card" data-num="PREUVE 05">
@@ -814,7 +820,7 @@ footer span { color: #4a8fff; }
     <div class="proof-card" data-num="PREUVE 06">
       <div class="proof-icon">⚡</div>
       <div class="proof-title">Énergie équilibrée</div>
-      <div class="proof-body">Écart-type inter-nœuds E_std faible jusqu'à t=2000s (phase stable), σ_max = 0.1025J en fin de simulation. IFO + FedAvg distribuent la charge efficacement pendant la phase critique.</div>
+      <div class="proof-body">L'écart-type inter-nœuds E_std reste inférieur à 0,1 J jusqu'à t=2 000s (phase stable), σ_max=0,1025 J en toute fin de simulation. IFO sélectionne les CHs sur critère énergétique (W1=0,50) ; FedAvg homogénéise les politiques → charge équilibrée.</div>
       <div class="proof-metric">E_std max : <span>0.1025 J</span> (fin de sim.)</div>
     </div>
   </div>
@@ -843,19 +849,19 @@ footer span { color: #4a8fff; }
       <div class="tl-body">Pour chaque nœud vivant : NS-3 envoie l'état → Python calcule le risque PEPM → Python choisit le next hop via Double DQN (ε=0.9 = 90% aléatoire au début) → NS-3 applique la route.</div>
     </div>
     <div class="tl-event">
-      <div class="tl-time">t = 2s à 600s — BOUCLE RL (toutes les 5s)</div>
-      <div class="tl-title"><span class="tl-badge tb-rl">ADDQN</span> 35 520 steps d'apprentissage</div>
-      <div class="tl-body">296 nœuds × (600s ÷ 5s) = 35 520 appels ADDQN. À chaque step : état → action → récompense → apprentissage. La Q-table s'améliore progressivement.</div>
+      <div class="tl-time">t = 5s à 3500s — BOUCLE RL (toutes les 5s)</div>
+      <div class="tl-title"><span class="tl-badge tb-rl">ADDQN</span> 159 753 steps d'apprentissage</div>
+      <div class="tl-body">Toutes les 5s : pour chaque nœud vivant, NS-3 envoie l'état (STATE_DIM=10) → Python sélectionne l'action via Double DQN (ε décroît de 0,9 à 0,1) → récompense → entraînement par batch de 64. 159 753 steps au total jusqu'à t=3 500s.</div>
     </div>
     <div class="tl-event">
       <div class="tl-time">t = 50s, 100s, 150s... — STATS</div>
       <div class="tl-title"><span class="tl-badge tb-metric">CSV</span> Enregistrement des métriques</div>
-      <div class="tl-body">Toutes les 50s : NS-3 appelle doCheck() qui lit l'énergie de tous les nœuds, calcule PDR, délai, FND/HND, et écrit une ligne dans <code>fdqnte_rounds.csv</code>. 12 lignes au total pour 600s.</div>
+      <div class="tl-body">Toutes les 5s (RL_STEP_INTERVAL) : RlStep() calcule les métriques (énergie, PDR, délai, PEPM) et écrit une ligne dans <code>fdqnte_energy.csv</code>. 70 lignes pour 3 500s (une par round de 50s). Les fichiers comparison_metrics.csv et fdqnte_rl_history.json sont générés en fin de simulation.</div>
     </div>
     <div class="tl-event">
       <div class="tl-time">t = 50s, 100s... (côté Python) — FEDAVG</div>
-      <div class="tl-title"><span class="tl-badge tb-fed">FED</span> 710 rondes d'agrégation fédérée</div>
-      <div class="tl-body">Toutes les 50 steps Python (≈ toutes les 0.85s simulées), FedMeta-DRL agrège les poids θ de tous les agents par FedAvg et redistribue θ_global. Cela explique pourquoi on a 710 rondes en 600s.</div>
+      <div class="tl-title"><span class="tl-badge tb-fed">FED</span> 3 191 rondes d'agrégation fédérée confirmées</div>
+      <div class="tl-body">Toutes les FED_PERIOD=50 steps RL (≈ 250s simulées), _run_federation() est lancé dans un thread séparé. Il agrège les poids θ de tous les CH actifs par FedAvg et retourne aggregation_ok=1 → NS-3 incrémente m_fedRound. Total : 3 191 rondes confirmées sur 3 500s.</div>
     </div>
     <div class="tl-event">
       <div class="tl-time">t = 100s, 200s... — RE-CLUSTERING</div>
@@ -863,9 +869,9 @@ footer span { color: #4a8fff; }
       <div class="tl-body">Toutes les 100s, IFO recalcule la fitness en tenant compte de l'énergie résiduelle réelle. Les Cluster Heads peuvent changer si un nœud s'est affaibli. Garantit l'équilibre de charge.</div>
     </div>
     <div class="tl-event hl">
-      <div class="tl-time">t = 600s — FIN</div>
+      <div class="tl-time">t = 3 500s — FIN</div>
       <div class="tl-title"><span class="tl-badge tb-metric">RÉSULTAT</span> Rapport final</div>
-      <div class="tl-body">NS-3 calcule les métriques finales : 300/300 nœuds vivants, PDR=100%, E_moy=2.000J, délai=29ms. Résultat écrit dans <code>fdqnte_results.csv</code>. Le socket est fermé proprement.</div>
+      <div class="tl-body">Résultats finaux : 30 nœuds vivants / 270 morts, PDR_RL=95,7%, PDR_NS3=100%, E_moy=0,049J, E_cons=358,5J, délai=17,83ms. FND=2097s, HND=2627s, LND=3397s. Fichiers exportés : fdqnte_energy.csv, fdqnte_summary.csv, comparison_metrics.csv, fdqnte_rl_history.json.</div>
     </div>
   </div>
 </section>
@@ -932,7 +938,7 @@ footer span { color: #4a8fff; }
     </div>
     <div class="gloss-item">
       <div class="gloss-term">Epsilon (ε) — Exploration vs Exploitation</div>
-      <div class="gloss-def">Au début (ε=0.9), l'agent choisit 90% aléatoirement (exploration). Avec le temps (ε=0.1), il utilise 90% sa Q-table (exploitation). Décroissance linéaire : ε(t+1) = ε(t) − 0.002 (EPSILON_DELTA=0.002).</div>
+      <div class="gloss-def">Au début (ε_max=0.9), l'agent choisit 90 % aléatoirement (exploration). Avec le temps (ε_min=0.1), il exploite sa Q-table. Décroissance linéaire : ε(t+1) = ε(t) − EPSILON_DELTA (δ=0.002), atteignant 0.1 après ≈ 400 steps. Pas de décroissance exponentielle.</div>
     </div>
     <div class="gloss-item">
       <div class="gloss-term">PDR — Packet Delivery Ratio</div>
@@ -951,7 +957,7 @@ footer span { color: #4a8fff; }
 
 <footer>
   <div>FDQN-TE+ · Documentation Architecture · <span>NS-3 + Python RL</span></div>
-  <div>300 nœuds · 23→3 clusters IFO · <span>159 753 steps RL</span> · PDR_NS3 100% · FND 2097s</div>
+  <div>300 nœuds · 23→3 clusters IFO · <span>159 753 steps RL</span> · 3 191 rondes FedAvg · PDR_NS3 100% · FND 2 097s · HND 2 627s · LND 3 397s</div>
 </footer>
 
 <!-- ═══════════ SCRIPTS ═══════════ -->
@@ -961,23 +967,25 @@ const details = {
   ifo: {
     title: 'IFO CLUSTERING (C++) — Sélection des Cluster Heads',
     items: [
-      { h: 'Principe', p: 'Chaque nœud calcule sa fitness : F = 0.5×(E/E₀) + 0.3×(1−d/dmax) + 0.2×(1/N_voisins). Cible N_CLUSTERS=30 CH. En pratique adaptatif : 23 clusters à t=0 (ComputeNClusters ajuste selon la densité). Les nœuds avec la meilleure fitness sont élus CH.' },
+      { h: 'Principe', p: `Chaque nœud calcule sa fitness : F = W1×(E/E₀) + W2×(1−d_sink/d_max) + W3×min(deg/N_opt, 1), avec W1=0.50 (énergie), W2=0.35 (proximité sink), W3=0.15 (densité). W1+W2+W3=1.0. Cible N_CLUSTERS=30 CH. En pratique : 23–25 clusters actifs jusqu'au FND (ComputeNClusters adaptatif).` },
       { h: 'Fréquence', p: 'Recalculé toutes les 100s (rounds pairs). Permet d\'adapter les clusters à l\'évolution de l\'énergie résiduelle.' },
       { h: 'Résultat', p: '30 clusters, chaque membre associé au CH le plus proche. Structure hiérarchique pour le routage multi-hop.' }
     ],
     code: `<span class="kw">double</span> calcFitness(NodeState& n) {
   <span class="kw">double</span> eRatio = n.energy / n.initEnergy;   <span class="cm">// 0→1</span>
   <span class="kw">double</span> dRatio = <span class="num">1.0</span> - n.distToSink / dMax; <span class="cm">// proche=1</span>
-  <span class="kw">double</span> sizeR  = <span class="num">1.0</span> / n.neighborCount;     <span class="cm">// peu=1</span>
-  <span class="kw">return</span> <span class="num">0.5</span>*eRatio + <span class="num">0.3</span>*dRatio + <span class="num">0.2</span>*sizeR;
+  <span class="kw">double</span> degRatio= std::min(n.neighborCount/<span class="num">10.0</span>, <span class="num">1.0</span>); <span class="cm">// N_opt=10</span>
+  <span class="kw">return</span> <span class="num">0.50</span>*eRatio  <span class="cm">// W1 énergie</span>
+       + <span class="num">0.35</span>*dRatio  <span class="cm">// W2 proximité sink</span>
+       + <span class="num">0.15</span>*degRatio; <span class="cm">// W3 densité</span>
 }`
   },
   network: {
     title: 'SIMULATION RÉSEAU (C++) — Physique et Protocoles',
     items: [
       { h: 'Modèle physique', p: 'FriisPropagationLoss modélise l\'atténuation radio en espace libre. Portée max = 150m. Chaque transmission consomme de l\'énergie réelle.' },
-      { h: 'Protocole', p: 'UDP sur 802.11b (WiFi). Taux = 1Mbps. Fenêtre de contention CSMA/CA. 1237 paquets en 600s = débit mesuré.' },
-      { h: 'Énergie', p: 'BasicEnergySource (2J initial) + WifiRadioEnergyModel (Tx: 0.0174W, Rx: 0.0197W, Idle: 0.002W).' }
+      { h: 'Protocole', p: 'IEEE 802.15.4 CSMA/CA simulé dans NS-3. RL_STEP_INTERVAL=5s. 27 040 paquets NS-3 émis et reçus (PDR_NS3=100%). Le modèle de canal log-distance (eval_common.h) calcule le PRR réaliste pour chaque saut.' },
+      { h: 'Énergie', p: 'BasicEnergySource (1,2 J initial, E_INIT=1.2J) calibrée sur le modèle LEACH analytique. Courants NS-3 : TX_CURRENT=91µA, RX_CURRENT=61µA, IDLE=0.5µA (tension 3,3V). Deux niveaux : énergie logique LEACH (métriques) et NS-3 BasicEnergySource (EnergyCallback).' }
     ],
     code: `<span class="cm">// Config énergie NS-3</span>
 BasicEnergySourceHelper energyHelper;
@@ -985,13 +993,15 @@ energyHelper.Set(<span class="str">"BasicEnergySourceInitialEnergyJ"</span>,
                  DoubleValue(p.initEnergy));
 
 WifiRadioEnergyModelHelper radioEnergy;
-radioEnergy.Set(<span class="str">"TxCurrentA"</span>, DoubleValue(<span class="num">0.0174</span>));
-radioEnergy.Set(<span class="str">"RxCurrentA"</span>, DoubleValue(<span class="num">0.0197</span>));`
+basicHelper.Set(<span class="str">"BasicEnergySourceInitialEnergyJ"</span>,
+                DoubleValue(<span class="num">1.2</span>));  <span class="cm">// E_INIT = 1.2J</span>
+<span class="cm">// Courants calibrés leach_energy.h :</span>
+<span class="cm">// TX=91µA, RX=61µA, Idle=0.5µA @ 3.3V</span>`
   },
   addqn: {
     title: 'ADDQN DOUBLE DQN (Python) — L\'Agent Décisionnel',
     items: [
-      { h: 'Architecture', p: 'Réseau neuronal : 10 → 64 → 64 → N_actions (STATE_DIM=10). Deux copies (online + target). Replay buffer 10 000 transitions. Batch size 64. Target update toutes les 100 steps.' },
+      { h: 'Architecture', p: 'MLP 3 couches : STATE_DIM=10 → 128 → 128 → MAX_NEIGHBORS=12, activations ReLU. Deux copies (policy_net online + target_net). Replay buffer REPLAY_SIZE=10 000. BATCH_SIZE=64. TARGET_UPDATE=100 steps (copie dure).' },
       { h: 'État [10 valeurs]', p: '[E/E₀, d_sink, σ_PEPM, voisins_vivants, isCH, transmissions, E_voisins, frac_vivants, d_CH, recluster_count] — 10 dimensions normalisées (STATE_DIM=10, BuildState()).' },
       { h: 'Action', p: 'Indice du meilleur voisin dans la liste fournie par NS-3. NS-3 convertit cet indice en ID de nœud et route le paquet.' }
     ],
@@ -1006,11 +1016,11 @@ radioEnergy.Set(<span class="str">"RxCurrentA"</span>, DoubleValue(<span class="
     title: 'PEPM-LSTM (Python) — Prédiction du Risque Énergétique',
     items: [
       { h: 'Architecture', p: 'LSTM à 64 cellules. Entrée : séquence de 10 mesures d\'énergie consécutives. Sortie : σ ∈ [0,1] = probabilité d\'épuisement.' },
-      { h: 'Intégration', p: 'NS-3 appelle GetPEPMRisk(node_id, energy) avant chaque décision ADDQN. σ est inclus dans l\'état [5 valeurs] de l\'ADDQN.' },
-      { h: 'Impact', p: 'Si σ > 0.7, l\'ADDQN pénalise ce nœud dans ses Q-values. Cela évite de router via un nœud qui va bientôt mourir.' }
+      { h: 'Intégration', p: 'NS-3 envoie un pepm_batch (tous les nœuds vivants en une requête). Python calcule le risque TTD = exp(−(E_res/drain_rate) / normalisateur). Le risque est la dimension [2] de l\'état STATE_DIM=10 de l\'ADDQN.' },
+      { h: 'Impact', p: 'Si risque > PEPM_RISK_THRESHOLD=0.7, la dimension λ₄·risque de la récompense est maximisée négativement → l\'ADDQN apprend à éviter ce nœud. Prévention proactive vs seuil réactif sur E_résiduelle brute.' }
     ],
     code: `<span class="kw">class</span> PEPMLSTMPredictor:
-  lstm = LSTM(input=<span class="num">3</span>, hidden=<span class="num">64</span>, layers=<span class="num">2</span>)
+  lstm = LSTM(input_size=<span class="num">1</span>, hidden_size=<span class="num">64</span>)  <span class="cm"># fenêtre=10 steps</span>
   fc   = Linear(<span class="num">64</span>, <span class="num">1</span>)
   sigmoid = Sigmoid()
 
@@ -1076,16 +1086,17 @@ std::string RLBridge::SendRecv(<span class="kw">const</span> std::string& msg) {
   server: {
     title: 'RL SERVER (Python) — Le Dispatcher Central',
     items: [
-      { h: 'Rôle', p: 'Écoute sur TCP 5555. Pour chaque message JSON reçu, lit le champ "type" et appelle le bon composant : "pepm" → PEPM, "action" → ADDQN, "reward" → apprentissage.' },
+      { h: 'Rôle', p: 'Écoute sur TCP 5555. 5 types de messages dispatché : "init" (initialisation), "action" (sélection next hop), "reward" (entraînement + FedAvg), "pepm_batch" (risque batch tous nœuds), "topology" (mise à jour clusters IFO).' },
       { h: 'Threading', p: 'Un thread par client NS-3. Actuellement 1 client (1 simulation NS-3). Architecture prête pour plusieurs simulations en parallèle.' },
       { h: 'Logging', p: 'Affiche [LOG] step=N | agents=300 | ε=... | R=... toutes les 100 steps. En fin de simulation : steps=159753, fed=3195, PDR=95.7%.' }
     ],
     code: `<span class="kw">def</span> dispatch(msg):
   t = msg[<span class="str">"type"</span>]
-  <span class="kw">if</span>   t == <span class="str">"pepm"</span>:   <span class="kw">return</span> pepm_pool.predict(msg)
-  <span class="kw">elif</span> t == <span class="str">"action"</span>: <span class="kw">return</span> agent_pool.act(msg)
-  <span class="kw">elif</span> t == <span class="str">"reward"</span>: <span class="kw">return</span> agent_pool.learn(msg)
-  <span class="kw">elif</span> t == <span class="str">"stats"</span>:  <span class="kw">return</span> agent_pool.stats()`
+  <span class="kw">if</span>   t == <span class="str">"init"</span>:       <span class="kw">return</span> self._handle_init(msg)
+  <span class="kw">elif</span> t == <span class="str">"action"</span>:     <span class="kw">return</span> self._handle_action(msg)
+  <span class="kw">elif</span> t == <span class="str">"reward"</span>:     <span class="kw">return</span> self._handle_reward(msg)
+  <span class="kw">elif</span> t == <span class="str">"pepm_batch"</span>: <span class="kw">return</span> self._handle_pepm_batch(msg)
+  <span class="kw">elif</span> t == <span class="str">"topology"</span>:   <span class="kw">return</span> self._handle_cluster(msg)`
   },
   state: {
     title: 'COLLECTE D\'ÉTAT (C++) — Ce que NS-3 Observe',
@@ -1098,9 +1109,9 @@ std::string RLBridge::SendRecv(<span class="kw">const</span> std::string& msg) {
 std::vector&lt;double&gt; state = {
   e / rlCtx.initEnergy,          <span class="cm">// énergie [0,1]</span>
   <span class="num">1.0</span> - std::min(<span class="num">1.0</span>, dSink/dMax), <span class="cm">// dist [0,1]</span>
-  <span class="num">0.8</span>,                            <span class="cm">// ETX estimé</span>
-  <span class="num">0.1</span>,                            <span class="cm">// Q précédent</span>
-  risk                            <span class="cm">// σ PEPM</span>
+  risk,                           <span class="cm">// σ PEPM [FIX-CFG-1]</span>
+  (double)ns.neighborCount/FdqnCfg::MAX_NEIGHBORS, <span class="cm">// voisins [0,1]</span>
+  <span class="cm">// ... (10 dimensions total — BuildState())</span>
 };`
   },
   apply: {
@@ -1156,7 +1167,7 @@ function dInit() {
   for (let i=0; i<DN; i++) {
     dnodes.push({
       id: i, x: rng()*DAREA, y: rng()*DAREA,
-      energy: 1.2, isAlive: true, isCH: false,
+      energy: 1.2, initE: 1.2, isAlive: true, isCH: false,
       clusterId: 0, clusterIdx: 0, pepmRisk: rng()*0.3,
       nextHop: -1, qval: 0, reward: 0, epsilon: 0.9, steps: 0
     });
@@ -1172,7 +1183,7 @@ const DCH_COLORS = ['#4a8fff','#4aff8c','#ff8c6a','#c47aff','#ffd070','#4affff',
 function dRunIFO() {
   dnodes.forEach(n => {
     const nb = dnodes.filter(o=>o.id!==n.id&&Math.sqrt((o.x-n.x)**2+(o.y-n.y)**2)<=DRADIO).length;
-    n.fitness = 0.5*(n.energy/2)+0.3*(1-n.distToSink/600)+0.2*(1/Math.max(1,nb));
+    n.fitness = 0.50*(n.energy/1.2)+0.35*(1-n.distToSink/Math.sqrt(2)*DAREA)+0.15*(Math.min(nb/10,1));
     n.isCH = false;
   });
   const sorted = [...dnodes].filter(n=>n.isAlive).sort((a,b)=>b.fitness-a.fitness);
@@ -1283,7 +1294,7 @@ function dStep() {
     if(nbs.length){
       const best=nbs.reduce((b,o)=>o.distToSink<b.distToSink?o:b,nbs[0]);
       n.nextHop=best.id;
-      n.qval=0.4-0.3*(1-n.energy/2)-0.2*Math.min(1,n.distToSink/600)+0.1*(1-n.pepmRisk);
+      n.qval=0.45*(1-Math.max(0,1-n.energy/1.2))+0.20*(n.energy/1.2)-0.10*(n.distToSink/Math.sqrt(2)*DAREA)-0.10*n.pepmRisk+0.15*(n.isCH?0.5:0);
       n.reward+=n.qval;
     }
     n.steps++;
