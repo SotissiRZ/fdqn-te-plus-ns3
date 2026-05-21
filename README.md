@@ -22,6 +22,7 @@ fdqn-te-plus/
 │   ├── fdqn_te_plus_noFed.cc         ← Ablation : sans Fédération
 │   ├── fdqn_noIFO.cc                 ← Ablation : sans IFO (DQN-LEACH baseline DRL)
 │   ├── fdqn_te_plus.cc               ← FDQN-TE+ complet (évaluation)
+│   ├── fdqn_te_plus_eval_robustness.cc ← FDQN-TE+ + test de robustesse (pannes aléatoires)
 │   │
 │
 ├── model/
@@ -36,6 +37,8 @@ fdqn-te-plus/
 │   ├──   rl_server_dqnleach.py     ← Serveur DQN-LEACH  (port 5559)
 │   ├──   aggregate_results.py      ← Agrégation multi-seeds, IC95%, graphes
 |   ├──   analyze_results.py        ← évaluation de la performance du modèle par rapport aux baselines et abblation, graphes
+│   ├──   generate_graphs.py        ← Graphiques comparatifs multi-modèles (baselines + ablations)
+│   ├──   generate_robustness.py    ← Graphiques de robustesse (pannes 0/10/20/30%)
 │   │
 │
 ├── results/                        ← Sorties de simulation du modèl fdqn_te_plus
@@ -106,6 +109,8 @@ cd ~/ns-allinone-3.39/ns-3.39
 | `gamma`       | 0.9     | Facteur d'actualisation (ADDQN)              |
 | `epsilonMax`  | 0.9     | Exploration initiale                         |
 | `epsilonMin`  | 0.1     | Exploration minimale                         |
+| `failureRate` | 0.0     | Fraction de nœuds à abattre (0.0 = désactivé, ex: 0.1/0.2/0.3) |
+| `failureTime` | 1200.0  | Instant de déclenchement des pannes (s)      |
 
 > **Paramètres modifiés** par rapport aux versions préliminaires :
 > `radioRange` 100 m → **150 m**, `initEnergy` 2.0 J → **1.2 J**,
@@ -152,6 +157,45 @@ python3 model/pepm/pepm_lstm.py
 python3 model/federated/fedmeta_drl.py
 ```
 
+### Test de robustesse — pannes aléatoires de nœuds
+
+Simule une défaillance simultanée de X% des nœuds à `t = failureTime`
+(modèle crash fault avec épuisement énergétique, cohérent LEACH).
+
+```bash
+cd ~/ns-allinone-3.39/ns-3.39
+mkdir -p logs results_eval/FDQN_TEplus
+
+# Lancer les 4 scénarios (0%, 10%, 20%, 30%) en séquence
+for rate in 0.0 0.1 0.2 0.3; do
+  tag=$(echo "$rate * 100" | bc | cut -d. -f1)
+  ./ns3 run "scratch/fdqn_te_plus_eval_robustness \
+    --nNodes=100 --initEnergy=1.0 --simDuration=3000 \
+    --failureRate=${rate} --failureTime=1200 --seed=42 \
+    --resultsDir=results_eval/FDQN_TEplus/failure_${tag}pct" \
+    2>&1 | tee logs/run_failure_${tag}pct.log
+done
+```
+
+> Le serveur Python est optionnel. Sans lui, le protocole bascule
+> automatiquement en mode Q-table fallback (ADDQN actif, PEPM désactivé).
+
+Générer les graphiques de robustesse après les simulations :
+
+```bash
+python3 model/generate_robustness.py
+# → figures/robustness_pdr_timeline.png
+# → figures/robustness_hnd_bar.png
+# → figures/robustness_summary.png
+```
+
+### Graphiques comparatifs multi-modèles
+
+```bash
+python3 model/generate_graphs.py --root results_eval --scale N300
+# → figures PNG avec IC95% pour toutes les baselines et ablations
+```
+
 ---
 
 ## 6. Métriques de sortie
@@ -166,12 +210,16 @@ python3 model/federated/fedmeta_drl.py
 | Délai moyen            | Délai bout-en-bout moyen FlowMonitor (ms)          |
 | Énergie consommée      | Énergie totale drainée depuis t=0 (J)              |
 | Équilibre énergie      | Gini des énergies résiduelles                      |
+| ForcedFailureNodes     | Nœuds abattus par injection (robustesse)           |
+| FailureRate            | Taux de panne injecté (robustesse)                 |
+| FailureTime_s          | Instant de déclenchement des pannes (robustesse)   |
 
 Les résultats sont sauvegardés dans :
 - `fdqnte_summary.csv` — scalaires finaux (FDQN-TE+, ablations, DQN-LEACH)
 - `summary.csv` — scalaires finaux (LEACH, HEED, Q-Routing)
 - `energy/fdqnte_energy.csv` — séries temporelles
 - `figures_multiseed/` — graphes PNG avec IC95%
+- `figures/robustness_*.png` — graphes de robustesse (générés par `generate_robustness.py`)
 
 ---
 
@@ -197,4 +245,3 @@ Nœud capteur
              Sink agrège modèles des CH (FedAvg global + FedMeta)
              Modèle global → diffusé à tous les nœuds
 ```
-
