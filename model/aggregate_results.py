@@ -43,18 +43,42 @@ PROTO_DIRS = {
     "LEACH":       "LEACH",
     "HEED":        "HEED",
     "QRouting":    "QRouting",
-    "DQN_LEACH":   "DQN_LEACH",   # --resultsDir=results_eval/DQN_LEACH
+    "DQN_LEACH":   "DQN_LEACH",
 }
 
 # Format du fichier summary selon le protocole
-# "fdqnte" → fdqnte_summary.csv avec colonnes Param,Value et clés FND_t/HND_t
-# "eval"   → summary.csv avec colonnes Metric,Value et clés FND_s/HND_s
+# "fdqnte" → fdqnte_summary.csv (Param,Value) : FND_t, HND_t, LND_t
+# "eval"   → summary.csv (Metric,Value)       : FND_s, HND_s, LND_s
 PROTO_SUMMARY_FORMAT = {
     "FDQN_TEplus": "fdqnte",
     "LEACH":       "eval",
     "HEED":        "eval",
     "QRouting":    "eval",
-    "DQN_LEACH":   "fdqnte",  # fdqn_noIFO écrit fdqnte_summary.csv (Param,Value + FND_t)
+    "DQN_LEACH":   "fdqnte",
+}
+
+# Ordre de recherche des fichiers SUMMARY par format
+SUMMARY_FILES = {
+    "fdqnte": ["fdqnte_summary.csv", "summary.csv"],
+    "eval":   ["summary.csv", "fdqnte_summary.csv"],
+}
+
+# Ordre de recherche des fichiers SÉRIE TEMPORELLE par format
+# "fdqnte" : energy/fdqnte_energy.csv contient Round, Time_s, AliveNodes, etc.
+#             comparison_metrics.csv = fallback (parfois malformé → FIX B11)
+# "eval"   : metrics.csv contient Time_s, AliveNodes, PDR_pct, etc.
+#             comparison_metrics.csv = fallback
+SERIES_FILES = {
+    "fdqnte": [
+        "energy/fdqnte_energy.csv",   # source principale FDQN
+        "comparison_metrics.csv",      # fallback (ex: scale_N100/seed_42 sans energy/)
+        "metrics.csv",
+    ],
+    "eval": [
+        "metrics.csv",                 # source principale baselines
+        "comparison_metrics.csv",      # fallback
+        "energy.csv",
+    ],
 }
 
 FIGSIZE_SINGLE = (10, 5)
@@ -115,13 +139,29 @@ def read_summary(path: Path) -> dict:
 
 
 def read_metrics_timeseries(path: Path) -> pd.DataFrame:
-    """Lit metrics.csv (ou energy.csv) et retourne un DataFrame."""
+    """Lit metrics.csv (ou energy.csv) et retourne un DataFrame.
+    FIX B11 : certains comparison_metrics.csv ont des lignes avec un champ
+    supplémentaire (ex: note textuelle en fin de ligne). On tente d'abord
+    la lecture stricte, puis on retente avec on_bad_lines='skip' pour
+    ignorer les lignes malformées plutôt que d'abandonner le fichier.
+    """
     try:
         df = pd.read_csv(path, comment="#")
         return df
+    except Exception:
+        pass
+    # 2ème tentative : ignorer les lignes malformées
+    try:
+        try:
+            df = pd.read_csv(path, comment="#", on_bad_lines="skip")
+        except TypeError:
+            # pandas < 1.3 : utiliser error_bad_lines
+            df = pd.read_csv(path, comment="#", error_bad_lines=False)
+        if not df.empty:
+            return df
     except Exception as e:
         print(f"  [WARN] Impossible de lire {path}: {e}")
-        return pd.DataFrame()
+    return pd.DataFrame()
 
 
 
@@ -157,6 +197,7 @@ def collect_all_data(results_dir: Path, seeds: list, protocols: dict):
     """
     scalars = {p: {} for p in protocols}
     series  = {p: [] for p in protocols}
+    final_energy = {}  # {proto: {seed: (t_final, e_final)}}
 
     for proto in protocols:
         # Dossier résultats (peut différer du nom de clé PROTOCOLS)
@@ -169,41 +210,74 @@ def collect_all_data(results_dir: Path, seeds: list, protocols: dict):
                 continue
 
             # ── Summary scalaires ─────────────────────────────────────────
-            if fmt == "fdqnte":
-                summary_files = ["fdqnte_summary.csv", "summary.csv"]
-            else:
-                summary_files = ["summary.csv", "fdqnte_summary.csv"]
+            summary_files = SUMMARY_FILES.get(fmt, ["summary.csv", "fdqnte_summary.csv"])
 
             for fname in summary_files:
                 spath = seed_dir / fname
                 if spath.exists():
                     s = read_summary(spath)
+                    fnd_keys = ["FND_t", "FND_s"]
+                    hnd_keys = ["HND_t", "HND_s"]
+                    e_keys   = ["EnergyTotalConsumed_J", "TotalEnergyConsumed_J"]
+                    t_keys   = ["SimDuration_s"]
+                    fnd_val = next((float(s[k]) for k in fnd_keys if k in s and s[k]), None)
+                    hnd_val = next((float(s[k]) for k in hnd_keys if k in s and s[k]), None)
+                    if fnd_val and hnd_val and hnd_val > 0 and fnd_val > hnd_val:
+                        print(f"  [WARN] {proto}/seed_{seed}: FND={fnd_val:.0f} > HND={hnd_val:.0f} "
+                              f"dans {fname} → données source suspectes")
+                    # FIX B15 : mémoriser l'énergie finale du summary
+                    e_final = next((float(s[k]) for k in e_keys if k in s and s[k]), None)
+                    t_sim   = next((float(s[k]) for k in t_keys if k in s and s[k]), 3500.0)
+                    if e_final is not None:
+                        final_energy.setdefault(proto, {})[seed] = (t_sim, e_final)
                     for k, v in s.items():
                         if isinstance(v, (int, float)):
                             scalars[proto].setdefault(k, []).append(v)
+                        elif v is not None:
+                            scalars[proto].setdefault(k, []).append(None)
                     break
 
             # ── Séries temporelles ────────────────────────────────────────
-            for fname in ["metrics.csv",
-                          "energy/fdqnte_energy.csv",
-                          "energy.csv"]:
+            series_files = SERIES_FILES.get(fmt, ["metrics.csv", "comparison_metrics.csv"])
+            for fname in series_files:
                 tpath = seed_dir / fname
                 if tpath.exists():
                     df = read_metrics_timeseries(tpath)
                     if not df.empty:
+                        fe = final_energy.get(proto, {}).get(seed)
+                        if fe is not None:
+                            t_fin, e_fin = fe
+                            e_cols = ["TotalDrained_J", "EnergyConsumed_J",
+                                      "energy_consumed_J", "energy_J", "EnergyTotal_J"]
+                            t_cols = ["Time_s", "time_s", "time"]
+                            e_col = next((c for c in e_cols if c in df.columns), None)
+                            t_col_s = next((c for c in t_cols if c in df.columns), None)
+                            if e_col and t_col_s and df[t_col_s].max() < t_fin - 50:
+                                # Ajouter un point final uniquement si la série est courte
+                                last_row = df.iloc[-1:].copy()
+                                last_row[t_col_s] = t_fin
+                                last_row[e_col]   = e_fin
+                                df = pd.concat([df, last_row], ignore_index=True)
                         series[proto].append(df)
                     break
 
-    return scalars, series
+    return scalars, series, final_energy
 
 
 # ─── Alignement des séries sur un axe temporel commun ─────────────────────────
 
 def align_series(dfs: list, time_col: str, value_col: str,
-                 t_min: float = 0, t_max: float = 3500, n_pts: int = 70):
+                 t_min: float = 0, t_max: float = 3500, n_pts: int = 70,
+                 **kwargs):
     """
     Interpole toutes les séries sur une grille commune [t_min, t_max].
     Retourne (t_grid, mean, ci_low, ci_high, std).
+    Paramètre optionnel :
+      right_val : valeur d'extrapolation pour t > max(t_data).
+                  Par défaut v[-1] (dernière valeur connue).
+                  Passer right_val=0 pour "alive nodes" quand le réseau
+                  est mort avant t_max (FIX B4 : évite les courbes plates
+                  artificielles pour LEACH/HEED dont le réseau s'éteint tôt).
     """
     t_grid = np.linspace(t_min, t_max, n_pts)
     interpolated = []
@@ -220,8 +294,10 @@ def align_series(dfs: list, time_col: str, value_col: str,
         t, v = t[idx], v[idx]
         _, uniq = np.unique(t, return_index=True)
         t, v = t[uniq], v[uniq]
+        right_val = kwargs.get("right_val", v[-1])
+        left_val  = kwargs.get("left_val",  v[0])
         v_interp = np.interp(t_grid, t, v,
-                             left=v[0], right=v[-1])
+                             left=left_val, right=right_val)
         interpolated.append(v_interp)
 
     if not interpolated:
@@ -258,7 +334,7 @@ def smooth(arr, window):
 def align_series_clipped(dfs, time_col, value_col,
                          t_min=0, t_max=3500, n_pts=70,
                          clip_min=None, clip_max=None,
-                         smooth_window=1):
+                         smooth_window=1, right_val=None, **kwargs):
     """
     Wrapper autour de align_series qui :
       - clippe les bandes IC95 dans [clip_min, clip_max]
@@ -266,9 +342,17 @@ def align_series_clipped(dfs, time_col, value_col,
     Utile pour le PDR par round, tres bruité en fin de simulation
     (quelques paquets par fenetre de 50 s), alors que le PDR cumule
     reste stable autour de 95-99%.
+    Paramètre right_val : transmis à align_series (FIX B4).
+      Passer right_val=0 pour "alive nodes" pour éviter les courbes
+      plates artificielles quand le réseau s'est éteint avant t_max.
     """
+    kw = {}
+    if right_val is not None:
+        kw["right_val"] = right_val
+    if "left_val" in kwargs:
+        kw["left_val"] = kwargs["left_val"]
     t, mean, lo, hi, std = align_series(dfs, time_col, value_col,
-                                         t_min, t_max, n_pts)
+                                         t_min, t_max, n_pts, **kw)
     if mean is None:
         return t, None, None, None, None
     # Lissage avant clipping
@@ -296,16 +380,15 @@ def detect_columns(dfs_by_proto: dict):
     seul le premier trouve est retenu et les courbes baselines disparaissent.
     """
     candidates = {
-        "time":   ["Time_s", "time_s", "time", "Round"],
-        "alive":  ["AliveNodes", "alive_nodes", "Alive"],
+        "time":   ["Time_s", "time_s", "time", "Round", "Time"],
+        "alive":  ["AliveNodes", "alive_nodes", "Alive", "N_alive"],
         "energy": ["TotalDrained_J", "EnergyConsumed_J", "energy_consumed_J",
-                   "energy_J", "EnergyTotal_J"],
-        # PDR_RL_pct = cumulatif (affiché dans les logs : PDR_RL=99.3%)
-        # PDR_RL_round_pct = per-round seulement → bruité, à eviter
+                   "energy_J", "EnergyTotal_J", "E_cons_J"],
         "pdr":    ["PDR_RL_pct", "PDR_pct", "pdr_pct",
                    "PDR_Global_pct", "PDR_NS3_pct",
-                   "PDR_RL_round_pct", "pdr"],
-        "delay":  ["AvgDelay_ms", "delay_ms", "Delay_ms", "avg_delay_ms"],
+                   "PDR_RL_round_pct", "pdr", "PDR_RL_rnd_pct"],
+        "delay":  ["AvgDelay_ms", "delay_ms", "Delay_ms", "avg_delay_ms",
+                   "AvgDelay", "delay"],
     }
     per_proto = {}
     for proto, dfs in dfs_by_proto.items():
@@ -336,8 +419,41 @@ def plot_alive_nodes(series, outdir, col_map_per_proto, n_nodes=300):
         col_map = col_map_per_proto.get(proto, {})
         t_col = col_map.get("time", "Time_s")
         v_col = col_map.get("alive", "AliveNodes")
-        t, mean, lo, hi, _ = align_series_clipped(dfs, t_col, v_col,
-                                                    clip_min=0, clip_max=n_nodes)
+
+        #Normalisation AliveNodes vers N=n_nodes
+        # Problème : seeds de différents N (50/100/200/300) mélangées.
+        # Solution robuste : chercher N dans la colonne "N" du CSV série,
+        # ou dans la colonne "N" du summary (via le time_col "Round" qui
+        # coexiste avec la colonne N dans comparison_metrics.csv).
+        # Fallback : max(AliveNodes) de la PREMIÈRE ligne du CSV
+        # (avant toute mort, t_min du CSV = t≈50s → v[0] fiable).
+        dfs_normalized = []
+        for df in dfs:
+            if v_col not in df.columns:
+                dfs_normalized.append(df)
+                continue
+            # Chercher N explicitement dans une colonne dédiée
+            n_proto = None
+            if "N" in df.columns:
+                n_proto = int(df["N"].iloc[0])
+            elif "nNodes" in df.columns:
+                n_proto = int(df["nNodes"].iloc[0])
+            if n_proto is None:
+                # Fallback : première valeur AliveNodes (avant t_min du CSV)
+                n_proto = int(df[v_col].iloc[0])
+            if n_proto > 0 and n_proto != n_nodes:
+                df = df.copy()
+                df[v_col] = (df[v_col] * n_nodes / n_proto).round()
+            dfs_normalized.append(df)
+
+        for i, df_chk in enumerate(dfs_normalized):
+            if v_col in df_chk.columns and len(df_chk) < 10:
+                print(f"  [WARN] {proto} seed#{i}: seulement {len(df_chk)} "
+                      f"points dans la série → courbe peut être trop lissée/plate")
+        t, mean, lo, hi, _ = align_series_clipped(dfs_normalized, t_col, v_col,
+                                                    clip_min=0, clip_max=n_nodes,
+                                                    right_val=0,
+                                                    **{"left_val": n_nodes})
         if mean is None:
             continue
         n_seeds_total = max(n_seeds_total, len(dfs))
@@ -430,11 +546,15 @@ def plot_pdr(series, outdir, col_map_per_proto, scalars=None):
         col_map = col_map_per_proto.get(proto, {})
         t_col = col_map.get("time", "Time_s")
         v_col = col_map.get("pdr", "PDR_RL_round_pct")
-        # PDR_RL_pct est cumulatif → deja lisse par nature, pas besoin de fenetre
+        # (PDR_RL_round_pct, PDR_pct, pdr_pct, pdr). Les colonnes cumulatives
+        # (PDR_RL_pct, PDR_Global_pct) sont déjà lisses → smooth_window=1.
+        CUMULATIVE_PDR_COLS = {"PDR_RL_pct", "PDR_Global_pct",
+                               "PDR_global_pct", "PDR_NS3_pct"}
+        pdr_smooth = 1 if v_col in CUMULATIVE_PDR_COLS else PDR_SMOOTH
         t, mean, lo, hi, _ = align_series_clipped(
             dfs, t_col, v_col,
             clip_min=0, clip_max=100,
-            smooth_window=1)
+            smooth_window=pdr_smooth)
         if mean is None:
             continue
         n_seeds_total = max(n_seeds_total, len(dfs))
@@ -543,9 +663,21 @@ def plot_dashboard(series, outdir, col_map_per_proto, n_nodes=300):
             v_col = col_map.get(metric_key, metric_key)
             # PDR cumulatif : pas de lissage necessaire
             sw = 1
+            # FIX B10: normalisation AliveNodes dans le dashboard
+            dfs_to_use = dfs
+            if metric_key == "alive":
+                dfs_to_use = []
+                for df in dfs:
+                    if v_col in df.columns:
+                        n_proto = int(df[v_col].max())
+                        if n_proto > 0 and n_proto != n_nodes:
+                            df = df.copy()
+                            df[v_col] = (df[v_col] * n_nodes / n_proto).round()
+                    dfs_to_use.append(df)
             t, mean, lo, hi, _ = align_series_clipped(
-                dfs, t_col, v_col, clip_min=cmin, clip_max=cmax,
-                smooth_window=sw)
+                dfs_to_use, t_col, v_col, clip_min=cmin, clip_max=cmax,
+                smooth_window=sw,
+                **{"left_val": n_nodes} if metric_key == "alive" else {})
             if mean is None:
                 continue
             line, = ax.plot(t, mean, color=color, ls=ls, lw=lw,
@@ -594,12 +726,16 @@ def plot_dashboard(series, outdir, col_map_per_proto, n_nodes=300):
 #
 # Les aliases permettent à export_aggregate_summary() de trouver la valeur
 # quelle que soit la convention de nommage du protocole.
+# SIM_DURATION : borne supérieure physique pour les métriques temporelles.
+# Une IC95 supérieure à cette valeur n'est pas interprétable (réseau déjà mort).
+SIM_DURATION_MAX = 3500.0
+
 SCALAR_MAP = {
-    "FND_t":             ("FND (s)",               0, None,
+    "FND_t":             ("FND (s)",               0, SIM_DURATION_MAX,
                           ["FND_s", "fnd_t", "FND"]),
-    "HND_t":             ("HND (s)",               0, None,
+    "HND_t":             ("HND (s)",               0, SIM_DURATION_MAX,
                           ["HND_s", "hnd_t", "HND"]),
-    "LND_t":             ("LND-90% (s)",           0, None,
+    "LND_t":             ("LND-90% (s)",           0, SIM_DURATION_MAX,
                           ["LND_s", "lnd_t", "LND"]),
     "PDR_RL_preFND_pct": ("PDR stable pre-FND (%)", 0, 100,
                           ["PDR_Stable_pct", "PDR_preFND_pct",
@@ -633,6 +769,33 @@ def export_aggregate_summary(scalars, outdir, seeds):
                         break
             if vals:
                 arr = np.array(vals)
+
+                is_lnd_metric = "LND" in nice_key
+                is_temporal   = nice_key in ("FND (s)", "HND (s)", "LND-90% (s)")
+                # Filtrer les None (seeds sans données) et les 0 (non atteint)
+                arr_valid = arr[~np.isnan(arr.astype(float))] if arr.dtype != object else arr
+                nonzero = arr[arr > 0] if arr.dtype != object else arr
+                if is_lnd_metric and len(nonzero) == 0:
+                    row[f"{nice_key} — moy"]       = ">3500 (non atteint)"
+                    row[f"{nice_key} — std"]        = "N/A"
+                    row[f"{nice_key} — IC95_low"]   = "N/A"
+                    row[f"{nice_key} — IC95_high"]  = "N/A"
+                    continue  # passer à la prochaine métrique
+
+                n_total = len(arr)
+                if is_temporal and len(nonzero) < n_total:
+                    n_not_reached = n_total - len(nonzero)
+                    arr = nonzero if len(nonzero) > 0 else arr
+                    metric_label = nice_key.split(" (s)")[0] if " (s)" in nice_key else nice_key
+                    row[f"{nice_key} — note"] = (
+                        f"n={len(nonzero)}/{n_total} seeds atteint {metric_label}"
+                        + (" ⚠ moyenne sur sous-ensemble" if n_not_reached > 0 else "")
+                    )
+                elif is_lnd_metric and len(nonzero) < len(arr):
+                    n_not_reached = len(arr) - len(nonzero)
+                    arr = nonzero  # moyenne sur les seeds qui ont atteint le seuil
+                    row[f"{nice_key} — note"] = f"n={len(nonzero)}/{len(arr)+n_not_reached} seeds atteint LND"
+
                 mean = arr.mean()
                 std  = arr.std(ddof=1) if len(arr) > 1 else 0.0
                 n    = len(arr)
@@ -640,17 +803,26 @@ def export_aggregate_summary(scalars, outdir, seeds):
                 margin = t_crit * std / np.sqrt(n) if n > 1 else 0.0
                 ci_low  = mean - margin
                 ci_high = mean + margin
-                # FIX : clipping physique — evite temps negatif, PDR > 100 %, etc.
-                if clip_lo is not None:
-                    ci_low  = max(ci_low,  clip_lo)
-                    mean    = max(mean,     clip_lo)
-                if clip_hi is not None:
-                    ci_high = min(ci_high, clip_hi)
-                    mean    = min(mean,    clip_hi)
+                cv = (std / mean * 100) if mean != 0 else float('inf')
+
+                # IC95_low < 0 pour une durée = non physique → annoter
+                ic_low_note  = ""
+                ic_high_note = ""
+                if clip_lo is not None and ci_low < clip_lo:
+                    ic_low_note = f" [non physique: {ci_low:.0f}]"
+                    ci_low = clip_lo
+                if clip_hi is not None and ci_high > clip_hi:
+                    ic_high_note = f" [non physique: {ci_high:.0f}]"
+                    ci_high = clip_hi
+                    mean = min(mean, clip_hi)
+
+                cv_flag = " ⚠ CV>50%" if cv > 50 else ""
+
                 row[f"{nice_key} — moy"]       = round(mean,    3)
                 row[f"{nice_key} — std"]        = round(std,     3)
-                row[f"{nice_key} — IC95_low"]   = round(ci_low,  3)
-                row[f"{nice_key} — IC95_high"]  = round(ci_high, 3)
+                row[f"{nice_key} | CV_pct"]      = round(cv,      1)  # séparateur | pour éviter confusion avec — moy
+                row[f"{nice_key} — IC95_low"]   = str(round(ci_low,  3)) + ic_low_note + cv_flag
+                row[f"{nice_key} — IC95_high"]  = str(round(ci_high, 3)) + ic_high_note
             else:
                 row[f"{nice_key} — moy"]       = "N/A"
                 row[f"{nice_key} — std"]        = "N/A"
@@ -659,6 +831,17 @@ def export_aggregate_summary(scalars, outdir, seeds):
         rows.append(row)
 
     df = pd.DataFrame(rows)
+    for _, row in df.iterrows():
+        try:
+            fnd = float(row.get("FND (s) — moy", 0))
+            hnd = float(row.get("HND (s) — moy", float('inf')))
+            if fnd > hnd and fnd > 0 and hnd > 0:
+                print(f"  [WARN] {row['Protocole']}: FND_moy={fnd:.0f} > HND_moy={hnd:.0f} !")
+                print(f"         → Vérifier les seeds: n(FND)={len(scalars.get(row['Protocole'].split()[0], {}).get('FND_t', []))} seeds")
+                print(f"           Cause probable: seeds différentes pour FND et HND (HND=0 exclu dans certaines seeds)")
+        except (ValueError, TypeError):
+            pass
+
     out_path = outdir / "aggregate_summary.csv"
     df.to_csv(out_path, index=False)
     print(f"\n  OK aggregate_summary.csv ({len(df)} protocoles, {len(seeds)} seeds)")
@@ -672,12 +855,16 @@ def export_aggregate_summary(scalars, outdir, seeds):
     for _, row in df.iterrows():
         print(f"  {row['Protocole']:<32}", end="")
         for k in list(row.index):
-            if "FND (s)" in k and "moy" in k and "IC" not in k and "std" not in k:
+            if "FND (s)" in k and k.endswith("— moy"):
                 print(f"  FND={row[k]}", end="")
-            if "HND (s)" in k and "moy" in k and "IC" not in k and "std" not in k:
+            if "HND (s)" in k and k.endswith("— moy"):
                 print(f"  HND={row[k]}", end="")
-            if "Delai" in k and "moy" in k and "IC" not in k and "std" not in k:
+            if "Delai" in k and k.endswith("— moy"):
                 print(f"  Delay={row[k]}", end="")
+            if "PDR stable" in k and k.endswith("— moy"):
+                print(f"  PDR_stable={row[k]}", end="")
+            if "CV_pct" in k and "Delai" in k:
+                print(f"  CV%={row[k]}", end="")
         print()
 
     return df
@@ -708,12 +895,21 @@ def plot_multiseed_bars(scalars, outdir, seeds):
     HND_KEYS = ["HND_t", "HND_s"]
 
     def get_stat(sc, keys):
-        """Retourne (mean, ci_margin, n) depuis les aliases de clés."""
+        """Retourne (mean, ci_margin, n) depuis les aliases de clés.
+        FIX B2 : on ne filtre plus les zéros — un FND/HND = 0 est une vraie
+        valeur aberrante qui doit être visible, pas silencieusement supprimée.
+        Seuls les None et les non-parsables sont exclus.
+        IMPORTANT : si mean==0 après filtrage → probablement toutes les seeds
+        ont FND=0 (réseau jamais simulé ou crash) — signalé comme N/A dans le graphe.
+        """
         for k in keys:
             vals = sc.get(k, [])
             if vals:
-                arr = np.array([v for v in vals if v and v > 0])
+                # Cohérent avec export_aggregate_summary (FIX B8)
+                arr_all = np.array([v for v in vals if v is not None])
+                arr = arr_all[arr_all > 0]  # exclure HND=0 (réseau vivant)
                 if len(arr) == 0:
+                    # Toutes les seeds ont HND=0 → réseau vivant partout
                     return None, 0, 0
                 mean = arr.mean()
                 std  = arr.std(ddof=1) if len(arr) > 1 else 0.0
@@ -762,12 +958,15 @@ def plot_multiseed_bars(scalars, outdir, seeds):
         for i, (m, mg, n) in enumerate(zip(means, margins, ns)):
             if m:
                 ci_str = f"±{mg:.0f}" if mg > 0 else "±0"
+                cv_val = (mg / m * 100 / 1.96 * np.sqrt(n)) if m > 0 and n > 1 else 0
+                cv_marker = "*" if cv_val > 50 else ""
                 ax.text(x[i], m + max(m * 0.02, 20),
-                        f"{m:.0f}s\n{ci_str}",
+                        f"{m:.0f}s\n{ci_str}{cv_marker}",
                         ha="center", va="bottom", fontsize=8, fontweight="bold")
             else:
                 ax.text(x[i], 50, "N/A", ha="center", va="bottom",
                         fontsize=8, color="gray")
+        # Note: * = CV > 50% (variance inter-seeds très élevée, IC peu fiable)
 
         ax.set_title(title, fontsize=12, fontweight="bold")
         ax.set_ylabel("Durée (s)")
@@ -828,24 +1027,25 @@ def plot_scalability(results_dir: Path, outdir: Path, seeds: list,
         """
         proto_dir = PROTO_DIRS.get(proto_key, proto_key)
         fmt       = PROTO_SUMMARY_FORMAT.get(proto_key, "eval")
-        fnames    = (["fdqnte_summary.csv", "summary.csv"] if fmt == "fdqnte"
-                     else ["summary.csv", "fdqnte_summary.csv"])
+        fnames    = SUMMARY_FILES.get(fmt, ["summary.csv", "fdqnte_summary.csv"])
         vals_fnd, vals_hnd = [], []
 
         for seed in seeds:
-            # Candidats : dossier scale dédié d'abord, puis dossier direct {proto}/seed_{s}/
-            # Le fallback est toujours ajouté (pas seulement pour n == n_nodes_main)
-            # afin de suivre la structure réelle : results_dir/{proto}/seed_{s}/
+
             candidates = [
                 results_dir / f"scale_N{n}" / proto_dir / f"seed_{seed}",
                 results_dir / proto_dir / f"seed_{seed}",
             ]
 
+            seed_found = False
             for spath in candidates:
+                if seed_found:
+                    break
                 for fname in fnames:
                     fp = spath / fname
                     if fp.exists():
                         s = read_summary(fp)
+                        fnd_added = False
                         for k in FND_KEYS:
                             v = s.get(k)
                             if v is not None:
@@ -853,6 +1053,7 @@ def plot_scalability(results_dir: Path, outdir: Path, seeds: list,
                                     fv = float(v)
                                     if fv > 0:
                                         vals_fnd.append(fv)
+                                        fnd_added = True
                                 except (ValueError, TypeError):
                                     pass
                         for k in HND_KEYS:
@@ -864,10 +1065,9 @@ def plot_scalability(results_dir: Path, outdir: Path, seeds: list,
                                         vals_hnd.append(hv)
                                 except (ValueError, TypeError):
                                     pass
-                        break   # found a summary file for this seed
-                else:
-                    continue
-                break           # found a directory for this seed
+                        if fnd_added:
+                            seed_found = True
+                        break   # found a summary file — stop fname loop
 
         return vals_fnd, vals_hnd
 
@@ -959,6 +1159,12 @@ def plot_scalability(results_dir: Path, outdir: Path, seeds: list,
                 ax.annotate(f"{y:.0f}", xy=(x, y),
                             xytext=(0, 8), textcoords="offset points",
                             ha="center", fontsize=7, color=color)
+            # FIX B13 : annoter les N sans donnée HND (réseau vivant à la fin)
+            missing = [n for n in n_nodes_list
+                       if n not in xs and metric_idx == 2]  # 2 = HND
+            for n_miss in missing:
+                ax.annotate("→∞", xy=(n_miss, ax.get_ylim()[0] + 50),
+                            ha="center", fontsize=7, color=color, alpha=0.7)
 
         ax.set_title(title, fontsize=11, fontweight="bold")
         ax.set_xlabel("Nombre de nœuds N", fontsize=10)
@@ -1036,10 +1242,8 @@ def main():
 
     # ── Collecte ──────────────────────────────────────────────────────────────
     print("\n  Lecture des données...")
-    scalars, series = collect_all_data(results_dir, available_seeds, PROTOCOLS)
+    scalars, series, final_energy = collect_all_data(results_dir, available_seeds, PROTOCOLS)
 
-    # FIX : detection par protocole (evite qu'un seul nom de colonne soit retenu
-    # pour tous les protocoles — les baselines disparaissaient des graphes)
     col_map_per_proto = detect_columns(series)
     for p, cm in col_map_per_proto.items():
         print(f"  Colonnes [{p}] : {cm}")
